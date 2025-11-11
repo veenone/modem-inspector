@@ -14,12 +14,14 @@ from src.core.exceptions import (
     BufferOverflowError
 )
 from src.core.serial_handler import SerialHandler, PortInfo
+from src.core.at_executor import ATExecutor
 
 __all__ = [
     'CommandResponse',
     'ResponseStatus',
     'SerialHandler',
     'PortInfo',
+    'ATExecutor',
     'ModemInspectorError',
     'SerialPortError',
     'SerialPortBusyError',
