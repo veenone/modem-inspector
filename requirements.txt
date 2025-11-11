@@ -1,3 +1,6 @@
 # Core dependencies for Modem Inspector
 pyserial>=3.5
 pyyaml>=6.0
+
+# Optional: For plugin schema validation (future)
+# jsonschema>=3.0

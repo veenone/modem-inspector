@@ -1,0 +1,253 @@
+# Quectel EC200U-CN LTE Cat 1 Module Plugin
+# Comprehensive plugin definition demonstrating all features
+
+metadata:
+  vendor: "quectel"
+  model: "ec200u"
+  category: "lte_cat1"
+  version: "1.0.0"
+  author: "Modem Inspector Team"
+  compatible_with: "inspector_v1.0+"
+  variants:
+    - "EC200U-CN"
+    - "EC200U-EU"
+    - "EC200U-AU"
+
+# Serial connection configuration
+connection:
+  default_baud: 115200
+  data_bits: 8
+  parity: "N"
+  stop_bits: 1
+  flow_control: false
+  # Initialization sequence executed before inspection
+  init_sequence:
+    - cmd: "ATE0"
+      expected: "OK"
+    - cmd: "AT+CMEE=2"
+      expected: "OK"
+
+# Command definitions organized by category
+commands:
+  # Basic identification commands
+  basic:
+    - cmd: "AT"
+      description: "Test command - verifies modem responsiveness"
+      category: "basic"
+      timeout: 5
+      critical: true
+      quick: true
+      expected_format: "OK"
+
+    - cmd: "ATI"
+      description: "Display product identification information"
+      category: "basic"
+      timeout: 5
+      quick: true
+      expected_format: "Quectel\\nEC200U\\n..."
+
+    - cmd: "AT+CGMI"
+      description: "Request manufacturer identification"
+      category: "basic"
+      timeout: 5
+      critical: true
+      quick: true
+      expected_format: "Quectel"
+
+    - cmd: "AT+CGMM"
+      description: "Request model identification"
+      category: "basic"
+      timeout: 5
+      parser: "model_parser"
+      quick: true
+      expected_format: "EC200U"
+
+    - cmd: "AT+CGMR"
+      description: "Request revision identification (firmware version)"
+      category: "basic"
+      timeout: 5
+      parser: "version_parser"
+      quick: true
+      expected_format: "EC200UCNAAR01A01M16"
+
+    - cmd: "AT+CGSN"
+      description: "Request IMEI (International Mobile Equipment Identity)"
+      category: "basic"
+      timeout: 5
+      parser: "imei_parser"
+      quick: true
+      expected_format: "15-digit IMEI"
+
+  # Network and signal commands
+  network:
+    - cmd: "AT+CSQ"
+      description: "Signal quality report"
+      category: "network"
+      timeout: 5
+      parser: "signal_parser"
+      quick: true
+      expected_format: "+CSQ: <rssi>,<ber>"
+
+    - cmd: "AT+COPS?"
+      description: "Operator selection (current network)"
+      category: "network"
+      timeout: 10
+      parser: "operator_parser"
+      expected_format: "+COPS: <mode>,<format>,<operator>,<AcT>"
+
+    - cmd: "AT+CREG?"
+      description: "Network registration status"
+      category: "network"
+      timeout: 5
+      parser: "registration_parser"
+      quick: true
+      expected_format: "+CREG: <n>,<stat>"
+
+    - cmd: "AT+QNWINFO"
+      description: "Query network information (Quectel-specific)"
+      category: "network"
+      timeout: 5
+      parser: "network_info_parser"
+      expected_format: "+QNWINFO: <Act>,<oper>,<band>,<channel>"
+
+  # SIM card commands
+  sim:
+    - cmd: "AT+CIMI"
+      description: "Request IMSI (International Mobile Subscriber Identity)"
+      category: "sim"
+      timeout: 5
+      parser: "imsi_parser"
+      expected_format: "15-digit IMSI"
+
+    - cmd: "AT+ICCID"
+      description: "Read ICCID (SIM card serial number)"
+      category: "sim"
+      timeout: 5
+      parser: "iccid_parser"
+      expected_format: "+ICCID: <iccid>"
+
+    - cmd: "AT+CPIN?"
+      description: "Enter PIN / check SIM card status"
+      category: "sim"
+      timeout: 5
+      critical: true
+      expected_format: "+CPIN: READY"
+
+  # Power and temperature
+  power:
+    - cmd: "AT+CBC"
+      description: "Battery charge status"
+      category: "power"
+      timeout: 5
+      parser: "battery_parser"
+      expected_format: "+CBC: <bcs>,<bcl>,<voltage>"
+
+    - cmd: "AT+QTEMP"
+      description: "Query temperature (Quectel-specific)"
+      category: "power"
+      timeout: 5
+      parser: "temperature_parser"
+      expected_format: "+QTEMP: <temp_adc>,<temp_pa>,<temp_xo>"
+
+# Parser definitions for extracting structured data
+parsers:
+  # Regex parser example: Extract model name
+  model_parser:
+    name: "model_parser"
+    type: "regex"
+    pattern: "EC200U[A-Z\\-]*"
+    groups: ["model"]
+    output_format: "dict"
+
+  # Regex parser: Extract firmware version
+  version_parser:
+    name: "version_parser"
+    type: "regex"
+    pattern: "EC200U([A-Z]+)([A-Z0-9]+)"
+    groups: ["region", "version"]
+    output_format: "dict"
+
+  # Regex parser: Extract IMEI (15 digits)
+  imei_parser:
+    name: "imei_parser"
+    type: "regex"
+    pattern: "(\\d{15})"
+    groups: ["imei"]
+    output_format: "dict"
+
+  # Regex parser: Signal strength with named groups
+  signal_parser:
+    name: "signal_parser"
+    type: "regex"
+    pattern: "\\+CSQ:\\s*(\\d+),(\\d+)"
+    groups: ["rssi", "ber"]
+    unit: "dBm"
+    output_format: "dict"
+
+  # Regex parser: Operator information
+  operator_parser:
+    name: "operator_parser"
+    type: "regex"
+    pattern: "\\+COPS:\\s*(\\d+),(\\d+),\"([^\"]+)\",(\\d+)"
+    groups: ["mode", "format", "operator", "act"]
+    output_format: "dict"
+
+  # Regex parser: Registration status
+  registration_parser:
+    name: "registration_parser"
+    type: "regex"
+    pattern: "\\+CREG:\\s*(\\d+),(\\d+)"
+    groups: ["n", "stat"]
+    output_format: "dict"
+
+  # Regex parser: Network info (Quectel-specific)
+  network_info_parser:
+    name: "network_info_parser"
+    type: "regex"
+    pattern: "\\+QNWINFO:\\s*\"([^\"]+)\",\"([^\"]+)\",\"([^\"]+)\",(\\d+)"
+    groups: ["act", "operator", "band", "channel"]
+    output_format: "dict"
+
+  # Regex parser: IMSI (15 digits)
+  imsi_parser:
+    name: "imsi_parser"
+    type: "regex"
+    pattern: "(\\d{15})"
+    groups: ["imsi"]
+    output_format: "dict"
+
+  # Regex parser: ICCID
+  iccid_parser:
+    name: "iccid_parser"
+    type: "regex"
+    pattern: "\\+ICCID:\\s*([\\dA-F]+)"
+    groups: ["iccid"]
+    output_format: "dict"
+
+  # Regex parser: Battery status
+  battery_parser:
+    name: "battery_parser"
+    type: "regex"
+    pattern: "\\+CBC:\\s*(\\d+),(\\d+),(\\d+)"
+    groups: ["bcs", "bcl", "voltage"]
+    unit: "mV"
+    output_format: "dict"
+
+  # Regex parser: Temperature
+  temperature_parser:
+    name: "temperature_parser"
+    type: "regex"
+    pattern: "\\+QTEMP:\\s*\"xo_therm\",\"([-\\d]+)\""
+    groups: ["temperature"]
+    unit: "°C"
+    output_format: "dict"
+
+# Validation rules for testing with real hardware
+validation:
+  required_responses:
+    - "AT"
+    - "AT+CGMI"
+    - "AT+CGMM"
+  expected_values:
+    "AT+CGMI": ["Quectel"]
+    "AT+CGMM": ["EC200U"]

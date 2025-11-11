@@ -1,0 +1,50 @@
+# Sample Basic Modem Plugin
+# Demonstrates minimal required fields for a plugin
+
+metadata:
+  vendor: "sample"
+  model: "basic_modem"
+  category: "other"
+  version: "1.0.0"
+
+connection:
+  default_baud: 115200
+
+commands:
+  basic:
+    - cmd: "AT"
+      description: "Test command"
+      category: "basic"
+      quick: true
+
+    - cmd: "AT+CGMI"
+      description: "Manufacturer"
+      category: "basic"
+      quick: true
+
+    - cmd: "AT+CGMM"
+      description: "Model"
+      category: "basic"
+      quick: true
+
+    - cmd: "AT+CGMR"
+      description: "Firmware version"
+      category: "basic"
+      quick: true
+
+    - cmd: "AT+CGSN"
+      description: "IMEI"
+      category: "basic"
+      quick: true
+
+  network:
+    - cmd: "AT+CSQ"
+      description: "Signal quality"
+      category: "network"
+      quick: true
+
+parsers: {}
+
+validation:
+  required_responses:
+    - "AT"

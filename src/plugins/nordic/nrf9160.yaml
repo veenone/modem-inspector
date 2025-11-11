@@ -1,0 +1,142 @@
+# Nordic Semiconductor nRF9160 SiP Plugin
+# Low Power Cellular IoT System-in-Package
+
+metadata:
+  vendor: "nordic"
+  model: "nrf9160"
+  category: "iot"
+  version: "1.0.0"
+  author: "Modem Inspector Team"
+  compatible_with: "inspector_v1.0+"
+  variants:
+    - "nRF9160-SICA"
+    - "nRF9160-SIAA"
+
+connection:
+  default_baud: 115200
+  data_bits: 8
+  parity: "N"
+  stop_bits: 1
+  flow_control: false
+  init_sequence:
+    - cmd: "AT"
+      expected: "OK"
+    - cmd: "AT+CFUN=1"
+      expected: "OK"
+
+commands:
+  basic:
+    - cmd: "AT"
+      description: "Test command"
+      category: "basic"
+      timeout: 5
+      critical: true
+      quick: true
+      expected_format: "OK"
+
+    - cmd: "AT+CGMI"
+      description: "Manufacturer identification"
+      category: "basic"
+      timeout: 5
+      quick: true
+      expected_format: "Nordic Semiconductor ASA"
+
+    - cmd: "AT+CGMM"
+      description: "Model identification"
+      category: "basic"
+      timeout: 5
+      quick: true
+      expected_format: "nRF9160-SICA"
+
+    - cmd: "AT+CGMR"
+      description: "Firmware version"
+      category: "basic"
+      timeout: 5
+      parser: "version_parser"
+      quick: true
+      expected_format: "mfw_nrf9160_1.3.0"
+
+    - cmd: "AT+CGSN"
+      description: "IMEI"
+      category: "basic"
+      timeout: 5
+      parser: "imei_parser"
+      quick: true
+      expected_format: "15-digit IMEI"
+
+  network:
+    - cmd: "AT+CSQ"
+      description: "Signal quality"
+      category: "network"
+      timeout: 5
+      parser: "signal_parser"
+      quick: true
+      expected_format: "+CSQ: <rssi>,<ber>"
+
+    - cmd: "AT+CEREG?"
+      description: "EPS network registration status"
+      category: "network"
+      timeout: 5
+      parser: "registration_parser"
+      quick: true
+      expected_format: "+CEREG: <n>,<stat>"
+
+    - cmd: "AT%XMONITOR"
+      description: "Network monitor (Nordic-specific)"
+      category: "network"
+      timeout: 10
+      expected_format: "%XMONITOR: <status>"
+
+  power:
+    - cmd: "AT%XVBAT"
+      description: "Battery voltage (Nordic-specific)"
+      category: "power"
+      timeout: 5
+      parser: "battery_parser"
+      expected_format: "%XVBAT: <voltage>"
+
+parsers:
+  version_parser:
+    name: "version_parser"
+    type: "regex"
+    pattern: "mfw_nrf9160_([\\d\\.]+)"
+    groups: ["version"]
+    output_format: "dict"
+
+  imei_parser:
+    name: "imei_parser"
+    type: "regex"
+    pattern: "(\\d{15})"
+    groups: ["imei"]
+    output_format: "dict"
+
+  signal_parser:
+    name: "signal_parser"
+    type: "regex"
+    pattern: "\\+CSQ:\\s*(\\d+),(\\d+)"
+    groups: ["rssi", "ber"]
+    unit: "dBm"
+    output_format: "dict"
+
+  registration_parser:
+    name: "registration_parser"
+    type: "regex"
+    pattern: "\\+CEREG:\\s*(\\d+),(\\d+)"
+    groups: ["n", "stat"]
+    output_format: "dict"
+
+  battery_parser:
+    name: "battery_parser"
+    type: "regex"
+    pattern: "%XVBAT:\\s*(\\d+)"
+    groups: ["voltage"]
+    unit: "mV"
+    output_format: "dict"
+
+validation:
+  required_responses:
+    - "AT"
+    - "AT+CGMI"
+    - "AT+CGMM"
+  expected_values:
+    "AT+CGMI": ["Nordic Semiconductor ASA"]
