@@ -105,3 +105,105 @@ class BufferOverflowError(SerialPortError):
     sending data faster than it can be processed.
     """
     pass
+
+
+class PluginError(ModemInspectorError):
+    """Base exception for plugin system errors.
+
+    All plugin-related exceptions inherit from this base class.
+    """
+    pass
+
+
+class PluginValidationError(PluginError):
+    """Plugin fails schema or semantic validation.
+
+    Raised when a plugin YAML file fails validation checks.
+
+    Attributes:
+        file_path: Path to the invalid plugin file
+        errors: List of validation error messages
+    """
+
+    def __init__(self, message: str, file_path: str, errors: Optional[list] = None):
+        """Initialize PluginValidationError.
+
+        Args:
+            message: Human-readable error description
+            file_path: Path to invalid plugin file
+            errors: List of specific validation errors
+        """
+        super().__init__(message)
+        self.file_path = file_path
+        self.errors = errors or []
+
+    def __str__(self) -> str:
+        """Format error message with file path and errors."""
+        base_msg = super().__str__()
+        error_list = '\n  - '.join(self.errors) if self.errors else 'No details'
+        return f"{base_msg} (file: {self.file_path})\nErrors:\n  - {error_list}"
+
+
+class PluginNotFoundError(PluginError):
+    """Requested plugin does not exist.
+
+    Raised when attempting to load a plugin that cannot be found.
+
+    Attributes:
+        vendor: Requested vendor name
+        model: Requested model name
+        available: List of available plugin identifiers
+    """
+
+    def __init__(self, vendor: str, model: str, available: Optional[list] = None):
+        """Initialize PluginNotFoundError.
+
+        Args:
+            vendor: Requested vendor name
+            model: Requested model name
+            available: List of available plugin names
+        """
+        super().__init__(f"Plugin not found: {vendor}.{model}")
+        self.vendor = vendor
+        self.model = model
+        self.available = available or []
+
+    def __str__(self) -> str:
+        """Format error message with suggestions."""
+        base_msg = super().__str__()
+        if self.available:
+            suggestions = ', '.join(self.available[:5])
+            return f"{base_msg}\nAvailable plugins: {suggestions}..."
+        return base_msg
+
+
+class ParserError(PluginError):
+    """Parser execution failed.
+
+    Raised when a plugin parser fails to process a response.
+
+    Attributes:
+        parser_name: Name of the parser that failed
+        parser_type: Type of parser (regex, json, custom)
+        response: Original response that failed to parse
+    """
+
+    def __init__(self, message: str, parser_name: str, parser_type: str,
+                 response: Optional[str] = None):
+        """Initialize ParserError.
+
+        Args:
+            message: Human-readable error description
+            parser_name: Name of the parser that failed
+            parser_type: Type of parser
+            response: Response that failed to parse (optional)
+        """
+        super().__init__(message)
+        self.parser_name = parser_name
+        self.parser_type = parser_type
+        self.response = response
+
+    def __str__(self) -> str:
+        """Format error message with parser details."""
+        base_msg = super().__str__()
+        return f"{base_msg} (parser: {self.parser_name}, type: {self.parser_type})"
