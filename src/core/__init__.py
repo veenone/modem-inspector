@@ -13,10 +13,13 @@ from src.core.exceptions import (
     ATCommandError,
     BufferOverflowError
 )
+from src.core.serial_handler import SerialHandler, PortInfo
 
 __all__ = [
     'CommandResponse',
     'ResponseStatus',
+    'SerialHandler',
+    'PortInfo',
     'ModemInspectorError',
     'SerialPortError',
     'SerialPortBusyError',
