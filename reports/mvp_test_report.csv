@@ -1,6 +1,6 @@
 Command,Status,Execution Time (s),Retry Count,Timestamp,Error Code,Error Message,Response
-AT,success,0.070,0,2025-11-11 09:36:33,,,OK
-ATI,success,0.080,0,2025-11-11 09:36:33,,,Quectel; EC200U; Revision: EC200UCNAAR01A01M16; OK
-AT+CGMI,success,0.120,0,2025-11-11 09:36:33,,,Quectel; OK
-AT+CGMM,success,0.120,0,2025-11-11 09:36:33,,,EC200U; OK
-AT+CGMR,success,0.120,0,2025-11-11 09:36:33,,,EC200UCNAAR01A01M16; OK
+AT,success,0.070,0,2025-11-11 23:26:27,,,OK
+ATI,success,0.080,0,2025-11-11 23:26:27,,,Quectel; EC200U; Revision: EC200UCNAAR01A01M16; OK
+AT+CGMI,success,0.120,0,2025-11-11 23:26:27,,,Quectel; OK
+AT+CGMM,success,0.120,0,2025-11-11 23:26:27,,,EC200U; OK
+AT+CGMR,success,0.120,0,2025-11-11 23:26:27,,,EC200UCNAAR01A01M16; OK

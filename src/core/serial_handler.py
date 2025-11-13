@@ -5,7 +5,7 @@ with robust error handling and port discovery capabilities.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 import threading
 import time
 
@@ -18,6 +18,10 @@ from src.core.exceptions import (
     ConnectionTimeoutError,
     BufferOverflowError
 )
+
+# Avoid circular import for type hints
+if TYPE_CHECKING:
+    from src.logging.communication_logger import CommunicationLogger
 
 
 @dataclass
@@ -52,6 +56,7 @@ class SerialHandler:
                  port: str,
                  baud_rate: int = 115200,
                  timeout: float = 1.0,
+                 logger: Optional['CommunicationLogger'] = None,
                  **kwargs):
         """Initialize handler with port configuration.
 
@@ -59,14 +64,17 @@ class SerialHandler:
             port: Serial port device path
             baud_rate: Baud rate (default 115200)
             timeout: Read timeout in seconds (default 1.0)
+            logger: Optional CommunicationLogger for logging port events (default None)
             **kwargs: Additional arguments passed to serial.Serial
         """
         self.port = port
         self.baud_rate = baud_rate
         self.timeout = timeout
+        self.logger = logger
         self.kwargs = kwargs
         self._serial: Optional[serial.Serial] = None
         self._lock = threading.Lock()
+        self._open_time: Optional[float] = None  # Track session duration
 
     def open(self) -> None:
         """Open serial port and configure settings.
@@ -87,8 +95,32 @@ class SerialHandler:
                     timeout=self.timeout,
                     **self.kwargs
                 )
+                self._open_time = time.time()
+
+                # Log successful port open
+                if self.logger:
+                    self.logger.log_port_event(
+                        event="Port opened",
+                        port=self.port,
+                        details={
+                            "baud_rate": self.baud_rate,
+                            "timeout": self.timeout,
+                            **self.kwargs
+                        },
+                        level="INFO"
+                    )
+
             except serial.SerialException as e:
                 error_msg = str(e).lower()
+
+                # Log port open error
+                if self.logger:
+                    self.logger.log_error(
+                        source="SerialHandler",
+                        error=f"Failed to open port: {e}",
+                        details={"port": self.port, "error_type": type(e).__name__}
+                    )
+
                 if 'permission denied' in error_msg or 'access denied' in error_msg:
                     raise SerialPortError(
                         f"Permission denied accessing port {self.port}",
@@ -114,6 +146,14 @@ class SerialHandler:
                         e
                     )
             except Exception as e:
+                # Log unexpected error
+                if self.logger:
+                    self.logger.log_error(
+                        source="SerialHandler",
+                        error=f"Unexpected error opening port: {e}",
+                        details={"port": self.port, "error_type": type(e).__name__}
+                    )
+
                 raise SerialPortError(
                     f"Unexpected error opening port {self.port}: {e}",
                     self.port,
@@ -129,8 +169,31 @@ class SerialHandler:
             if self._serial is not None and self._serial.is_open:
                 try:
                     self._serial.close()
-                except Exception:
-                    pass  # Ignore errors during close
+
+                    # Log port close with session duration
+                    if self.logger:
+                        session_duration = None
+                        if self._open_time:
+                            session_duration = time.time() - self._open_time
+
+                        self.logger.log_port_event(
+                            event="Port closed",
+                            port=self.port,
+                            details={
+                                "session_duration_seconds": session_duration
+                            } if session_duration else None,
+                            level="INFO"
+                        )
+                except Exception as e:
+                    # Log close error
+                    if self.logger:
+                        self.logger.log_error(
+                            source="SerialHandler",
+                            error=f"Error closing port: {e}",
+                            details={"port": self.port}
+                        )
+                finally:
+                    self._open_time = None
 
     def write(self, data: str) -> int:
         """Write string to serial port.

@@ -4,13 +4,17 @@ This module provides high-level AT command execution with timeout,
 retry logic, and response parsing.
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 import time
 import threading
 
 from src.core.serial_handler import SerialHandler
 from src.core.command_response import CommandResponse, ResponseStatus
 from src.core.exceptions import ATCommandError
+
+# Avoid circular import for type hints
+if TYPE_CHECKING:
+    from src.logging.communication_logger import CommunicationLogger
 
 
 class ATExecutor:
@@ -34,7 +38,8 @@ class ATExecutor:
                  serial_handler: SerialHandler,
                  default_timeout: float = 30.0,
                  retry_count: int = 3,
-                 retry_delay: float = 1.0):
+                 retry_delay: float = 1.0,
+                 logger: Optional['CommunicationLogger'] = None):
         """Initialize executor with serial handler and defaults.
 
         Args:
@@ -42,11 +47,13 @@ class ATExecutor:
             default_timeout: Default timeout in seconds (default 30.0)
             retry_count: Default number of retry attempts (default 3)
             retry_delay: Base delay between retries in seconds (default 1.0)
+            logger: Optional CommunicationLogger for logging commands/responses (default None)
         """
         self.serial_handler = serial_handler
         self.default_timeout = default_timeout
         self.default_retry_count = retry_count
         self.retry_delay = retry_delay
+        self.logger = logger
         self._history: List[CommandResponse] = []
         self._history_lock = threading.Lock()
 
@@ -174,6 +181,13 @@ class ATExecutor:
 
         while attempt <= retry_count:
             try:
+                # Log command before execution
+                if self.logger and attempt == 0:  # Log only on first attempt
+                    self.logger.log_command(
+                        port=self.serial_handler.port,
+                        command=command
+                    )
+
                 start_time = time.time()
 
                 # Write command
@@ -195,11 +209,37 @@ class ATExecutor:
                     retry_count=attempt
                 )
 
+                # Log successful response
+                if self.logger:
+                    self.logger.log_response(
+                        port=self.serial_handler.port,
+                        response=parsed_response.get_response_text(),
+                        status=parsed_response.status.value,
+                        execution_time=execution_time,
+                        retry_count=attempt,
+                        command=command
+                    )
+
                 return parsed_response
 
             except TimeoutError as e:
                 last_exception = e
                 attempt += 1
+
+                # Log retry attempt
+                if self.logger and attempt <= retry_count:
+                    from src.logging.log_models import LogEntry
+                    from datetime import datetime
+
+                    self.logger.log(LogEntry(
+                        timestamp=datetime.now(),
+                        level="WARNING",
+                        source="ATExecutor",
+                        message=f"Command timeout, retry attempt {attempt}/{retry_count}",
+                        port=self.serial_handler.port,
+                        command=command,
+                        retry_count=attempt
+                    ))
 
                 # Exponential backoff: 1s, 2s, 4s
                 if attempt <= retry_count:
@@ -208,7 +248,7 @@ class ATExecutor:
 
         # All retries exhausted
         execution_time = time.time() - start_time
-        return CommandResponse(
+        timeout_response = CommandResponse(
             command=command,
             raw_response=[],
             status=ResponseStatus.TIMEOUT,
@@ -216,6 +256,19 @@ class ATExecutor:
             retry_count=retry_count,
             error_message=f"Timeout after {retry_count} retries: {last_exception}"
         )
+
+        # Log timeout failure
+        if self.logger:
+            self.logger.log_response(
+                port=self.serial_handler.port,
+                response="",
+                status="TIMEOUT",
+                execution_time=execution_time,
+                retry_count=retry_count,
+                command=command
+            )
+
+        return timeout_response
 
     def _parse_response(self,
                        command: str,

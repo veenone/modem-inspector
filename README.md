@@ -30,30 +30,59 @@ The Modem Inspector MVP provides a complete foundation for automated modem testi
    - Command execution results with timing
    - Error tracking and retry statistics
 
+5. **Communication Logging**
+   - Real-time AT command and response logging
+   - Configurable log levels (DEBUG, INFO, WARNING, ERROR)
+   - Multiple output destinations (file, console, GUI viewer)
+   - Automatic log rotation with configurable size limits
+   - Search and filter capabilities in GUI
+
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Install dependencies
+# Install dependencies (including GUI support)
 pip install -r requirements.txt
 ```
 
-### Port Discovery
+### GUI Mode (Default)
 
 ```bash
-# List available serial ports
-python main.py --discover-ports
+# Launch GUI application (default)
+python main.py
+
+# Or explicitly launch GUI
+python main.py --gui
 ```
 
-### Execute AT Commands
+The GUI provides:
+- **Port Discovery & Connection**: Visual port selection with auto-refresh
+- **Plugin Auto-Detection**: Automatic modem identification via AT commands
+- **Command Execution**: Real-time progress with color-coded logging
+- **Results Visualization**: Tabbed results organized by command category
+- **Report Generation**: Export results to CSV format
+
+### CLI Mode
 
 ```bash
+# Discover ports
+python main.py --cli --discover-ports
+
 # Execute single command
-python main.py --port COM3 --command "AT+CGMI"
+python main.py --cli --port COM3 --command "AT+CGMI"
 
 # Execute with verbose output
-python main.py --port /dev/ttyUSB0 --command "AT+CGMM" --verbose
+python main.py --cli --port /dev/ttyUSB0 --command "AT+CGMM" --verbose
+
+# Enable communication logging
+python main.py --cli --port COM3 --command "AT+CGMI" --log
+
+# Logging with custom options
+python main.py --cli --port COM3 --command "AT" --log --log-level DEBUG --log-to-console
+
+# Custom log file
+python main.py --cli --port COM3 --command "AT+CGMR" --log --log-file ~/my_session.log
 ```
 
 ### Run Integration Test
@@ -79,6 +108,17 @@ modem-inspector/
 │   │   ├── at_executor.py
 │   │   ├── plugin.py
 │   │   └── plugin_manager.py
+│   ├── logging/         # Communication logging
+│   │   ├── log_models.py
+│   │   ├── file_handler.py
+│   │   └── communication_logger.py
+│   ├── gui/             # GUI components
+│   │   ├── frames/
+│   │   │   ├── log_viewer_frame.py
+│   │   │   └── ...
+│   │   └── dialogs/
+│   │       ├── settings_dialog.py
+│   │       └── ...
 │   ├── plugins/         # Plugin definitions
 │   │   ├── quectel/
 │   │   │   └── lte_cat1/
@@ -90,6 +130,8 @@ modem-inspector/
 │   └── reports/         # Report generation
 │       ├── report_models.py
 │       └── csv_reporter.py
+├── docs/                # Documentation
+│   └── logging.md       # Logging guide
 ├── main.py              # CLI entry point
 ├── test_mvp.py          # Integration test
 └── requirements.txt
@@ -188,26 +230,123 @@ Configuration (YAML) → Plugin Manager → AT Executor → Serial Handler → M
 
 ## Requirements
 
+### Core Dependencies
 - Python 3.7+
 - pyserial >= 3.5
 - pyyaml >= 6.0
 
+### GUI Mode (Optional)
+Additional dependencies required for GUI mode:
+- customtkinter >= 5.0.0 (modern GUI framework)
+- pillow >= 9.0.0 (image support)
+- darkdetect >= 0.7.0 (dark mode detection)
+
+Install all dependencies including GUI support:
+```bash
+pip install -r requirements.txt
+```
+
+## Communication Logging
+
+The logging feature provides comprehensive tracking of all AT command communications:
+
+### Features
+- **Real-time Capture**: Logs all commands, responses, and port events with timestamps
+- **Log Levels**: DEBUG, INFO, WARNING, ERROR for flexible verbosity control
+- **Multiple Outputs**: File logging with rotation, console output (stderr), GUI viewer
+- **Automatic Rotation**: Configurable file size limits (default: 10MB) with backup retention
+- **Structured Format**: ISO 8601 timestamps, consistent fields, parseable format
+- **GUI Viewer**: Real-time display with search, filter, color coding, and export
+
+### CLI Usage
+
+```bash
+# Basic logging
+python main.py --cli --port COM3 --command "AT+CGMI" --log
+
+# Debug level with console output
+python main.py --cli --port COM3 --command "AT" --log --log-level DEBUG --log-to-console
+
+# Custom log file
+python main.py --cli --port COM3 --command "AT+CGMR" --log --log-file ~/session.log
+```
+
+### GUI Usage
+
+1. Open **Settings** → **Logging** tab
+2. Check **"Enable Communication Logging"**
+3. Configure log level and output options
+4. View logs in the **Communication Logs** tab with real-time updates
+
+For detailed documentation, see [docs/logging.md](docs/logging.md).
+
+## GUI Interface
+
+The GUI provides a complete graphical interface for modem inspection:
+
+### Features
+- **Port Management**: Visual port selection with auto-refresh and connection status
+- **Plugin Selection**:
+  - Auto-detection via AT+CGMI/AT+CGMM commands
+  - Manual selection from available plugins
+  - Category-based command filtering with Quick Scan mode
+- **Execution Control**:
+  - Real-time progress bar with ETA
+  - Color-coded logging (blue=command, green=success, red=error)
+  - Graceful cancellation support
+  - Execution summary with statistics
+- **Results Display**:
+  - Tabbed results organized by command category
+  - Search functionality with highlighting
+  - Export to CSV reports
+- **Communication Logs** (NEW):
+  - Real-time log viewer with color-coded entries
+  - Search and filter by log level
+  - Export visible logs to file
+  - Open log file in editor
+- **Settings & Help**:
+  - Configuration dialog for serial/report/logging settings
+  - Built-in help documentation
+  - Inspection history tracking
+
+### Architecture
+- **CustomTkinter**: Modern GUI framework
+- **Threaded Execution**: Non-blocking command execution
+- **Queue-based Communication**: Thread-safe progress updates
+- **MVC Pattern**: Clean separation of concerns
+
 ## Development Status
 
-**MVP Complete**: All core components implemented and tested
+**MVP + GUI + Logging Complete**: All core components, GUI interface, and communication logging implemented
 
 ### Completed
 - ✅ Configuration Management
 - ✅ AT Command Engine (serial I/O, retry logic)
 - ✅ Plugin Architecture (YAML-based plugins)
 - ✅ Report Generation (CSV format)
+- ✅ **Communication Logging** (NEW)
+  - ✅ Real-time command/response logging
+  - ✅ Configurable log levels (DEBUG, INFO, WARNING, ERROR)
+  - ✅ File logging with automatic rotation
+  - ✅ Console output (stderr)
+  - ✅ GUI log viewer with search/filter
+  - ✅ CLI logging flags (--log, --log-file, --log-level)
+- ✅ **GUI Interface** (CustomTkinter-based)
+  - ✅ Port discovery and connection management
+  - ✅ Plugin auto-detection and manual selection
+  - ✅ Threaded command execution with real-time updates
+  - ✅ Results visualization with search
+  - ✅ Report generation dialog
+  - ✅ Communication logs viewer (NEW)
+  - ✅ Settings and help dialogs (with logging tab)
+  - ✅ History management
 
 ### Future Enhancements
 - Parser Layer (feature extraction with confidence scoring)
 - Additional report formats (HTML, JSON, Markdown)
 - Plugin schema validation (jsonschema)
 - Hardware testing framework
-- Web UI for interactive testing
+- Unit and integration tests for logging module
 
 ## Testing
 
