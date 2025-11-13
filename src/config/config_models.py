@@ -79,10 +79,28 @@ class ReportingConfig:
 
 @dataclass(frozen=True)
 class LoggingConfig:
-    """Logging configuration."""
+    """Logging configuration for communication logging.
+
+    Controls verbosity, output destinations, and file rotation for AT command
+    communication logs. Supports both file and console output with configurable
+    log levels and automatic file rotation.
+
+    Attributes:
+        enabled: Whether communication logging is enabled
+        level: Log verbosity level (DEBUG, INFO, WARNING, ERROR)
+        log_to_file: Whether to write logs to file
+        log_to_console: Whether to write logs to console (stderr)
+        log_file_path: Path to log file (default: ~/.modem-inspector/logs/comm_{timestamp}.log)
+        max_file_size_mb: Maximum log file size before rotation (MB)
+        backup_count: Number of rotated backup files to keep
+    """
+    enabled: bool = False
     level: LogLevel = LogLevel.INFO
-    file_path: Optional[str] = None
-    console_output: bool = True
+    log_to_file: bool = False
+    log_to_console: bool = True
+    log_file_path: Optional[str] = None
+    max_file_size_mb: int = 10
+    backup_count: int = 5
 
 
 @dataclass(frozen=True)
@@ -94,6 +112,13 @@ class ParallelConfig:
 
 
 @dataclass(frozen=True)
+class EncryptionConfig:
+    """Encryption configuration for sensitive data."""
+    enabled: bool = False  # Encryption disabled by default
+    key_path: Optional[str] = None  # If None, uses default (~/.modem-inspector/.key)
+
+
+@dataclass(frozen=True)
 class Config:
     """Complete configuration object with all sections."""
     serial: SerialConfig = field(default_factory=SerialConfig)
@@ -102,6 +127,7 @@ class Config:
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     parallel: ParallelConfig = field(default_factory=ParallelConfig)
+    encryption: EncryptionConfig = field(default_factory=EncryptionConfig)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary.
@@ -150,5 +176,6 @@ class Config:
             repository=masked_repository,
             reporting=self.reporting,
             logging=self.logging,
-            parallel=self.parallel
+            parallel=self.parallel,
+            encryption=self.encryption
         )

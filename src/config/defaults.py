@@ -12,6 +12,7 @@ from src.config.config_models import (
     ReportingConfig,
     LoggingConfig,
     ParallelConfig,
+    EncryptionConfig,
     ValidationLevel,
     SyncMode,
     ReportFormat,
@@ -32,6 +33,7 @@ def get_default_config() -> Config:
         - Reporting: CSV format, ./reports directory
         - Logging: INFO level, console output enabled
         - Parallel: Disabled by default (single modem testing)
+        - Encryption: Disabled by default (opt-in feature)
     """
     return Config(
         serial=SerialConfig(
@@ -61,13 +63,21 @@ def get_default_config() -> Config:
             timestamp_format="%Y%m%d_%H%M%S"  # YYYYMMDD_HHMMSS format
         ),
         logging=LoggingConfig(
+            enabled=False,  # Disabled by default (opt-in feature)
             level=LogLevel.INFO,  # INFO level for normal operation
-            file_path=None,  # No log file by default (console only)
-            console_output=True  # Output to console
+            log_to_file=False,  # No file logging by default
+            log_to_console=True,  # Console output enabled when logging active
+            log_file_path=None,  # Auto-generated: ~/.modem-inspector/logs/comm_{timestamp}.log
+            max_file_size_mb=10,  # 10MB before rotation
+            backup_count=5  # Keep last 5 rotated files
         ),
         parallel=ParallelConfig(
             enabled=False,  # Single modem testing by default
             max_workers=5,  # Reasonable default for parallel mode
             worker_timeout=600  # 10 minutes per modem
+        ),
+        encryption=EncryptionConfig(
+            enabled=False,  # Disabled by default (opt-in feature for security)
+            key_path=None  # Auto-generated: ~/.modem-inspector/.key
         )
     )

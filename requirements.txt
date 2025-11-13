@@ -2,5 +2,13 @@
 pyserial>=3.5
 pyyaml>=6.0
 
-# Optional: For plugin schema validation (future)
-# jsonschema>=3.0
+# GUI dependencies (optional - only needed for GUI mode)
+customtkinter>=5.0.0
+pillow>=9.0.0
+darkdetect>=0.7.0
+
+# For configuration schema validation
+jsonschema>=4.0
+
+# For configuration encryption (AES-256-GCM)
+cryptography>=41.0.0
