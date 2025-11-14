@@ -37,6 +37,14 @@ The Modem Inspector MVP provides a complete foundation for automated modem testi
    - Automatic log rotation with configurable size limits
    - Search and filter capabilities in GUI
 
+6. **Parser Layer** ⭐ NEW
+   - Universal parser for standard 3GPP AT commands
+   - Vendor-specific parser extensions (Quectel, Nordic, SIMCom)
+   - Confidence scoring (0.0-1.0) for all extracted features
+   - Immutable data models with comprehensive feature schema
+   - Graceful error handling and conflict resolution
+   - JSON serialization for integration with reporting
+
 ## Quick Start
 
 ### Installation
@@ -85,11 +93,50 @@ python main.py --cli --port COM3 --command "AT" --log --log-level DEBUG --log-to
 python main.py --cli --port COM3 --command "AT+CGMR" --log --log-file ~/my_session.log
 ```
 
-### Run Integration Test
+### Parser Layer Usage
+
+```bash
+# Run parser demonstration with mock data
+python test_parser_basic.py
+
+# Run comprehensive integration example
+python examples/parser_integration_example.py
+
+# Using parser in your code
+from src.core import ATExecutor, SerialHandler
+from src.parsers import FeatureExtractor
+
+# Execute AT commands
+executor = ATExecutor(serial_handler)
+responses = {
+    "AT+CGMI": executor.execute_command("AT+CGMI"),
+    "AT+CGMM": executor.execute_command("AT+CGMM"),
+    # ... more commands
+}
+
+# Extract features with confidence scoring
+extractor = FeatureExtractor()
+features = extractor.extract_features(responses, plugin)
+
+# Access parsed data
+print(f"Manufacturer: {features.basic_info.manufacturer}")
+print(f"Confidence: {features.basic_info.manufacturer_confidence}")
+
+# Filter high-confidence features
+high_conf = features.get_high_confidence_features(threshold=0.7)
+
+# Export to JSON
+json_data = features.to_dict()
+```
+
+### Run Integration Tests
 
 ```bash
 # Test all components
 python test_mvp.py
+
+# Test parser integration
+python -m pytest tests/integration/test_parser_at_integration.py -v
 ```
 
 ## Project Structure
@@ -101,13 +148,24 @@ modem-inspector/
 │   │   ├── config_models.py
 │   │   ├── config_manager.py
 │   │   └── defaults.py
-│   ├── core/            # Core components
+│   ├── core/            # Core AT Command Engine
 │   │   ├── command_response.py
 │   │   ├── exceptions.py
 │   │   ├── serial_handler.py
 │   │   ├── at_executor.py
+│   │   ├── multi_modem_executor.py
 │   │   ├── plugin.py
 │   │   └── plugin_manager.py
+│   ├── parsers/         # Feature extraction layer ⭐ NEW
+│   │   ├── feature_model.py      # Immutable data models
+│   │   ├── base_parser.py        # Abstract vendor interface
+│   │   ├── universal.py          # Standard 3GPP parser
+│   │   ├── vendor_specific.py    # Vendor dispatcher
+│   │   ├── feature_extractor.py  # Orchestrator
+│   │   └── vendors/              # Vendor-specific parsers
+│   │       ├── quectel_parser.py
+│   │       ├── nordic_parser.py
+│   │       └── simcom_parser.py
 │   ├── logging/         # Communication logging
 │   │   ├── log_models.py
 │   │   ├── file_handler.py
@@ -130,10 +188,17 @@ modem-inspector/
 │   └── reports/         # Report generation
 │       ├── report_models.py
 │       └── csv_reporter.py
+├── examples/            # Usage examples
+│   └── parser_integration_example.py
+├── tests/               # Test suite
+│   ├── unit/
+│   └── integration/
+│       └── test_parser_at_integration.py
 ├── docs/                # Documentation
 │   └── logging.md       # Logging guide
 ├── main.py              # CLI entry point
 ├── test_mvp.py          # Integration test
+├── test_parser_basic.py # Parser demo
 └── requirements.txt
 ```
 
