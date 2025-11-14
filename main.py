@@ -202,7 +202,102 @@ Examples:
         help='Output logs to console (stderr) in addition to file'
     )
 
+    # Configuration management arguments
+    parser.add_argument(
+        '--show-config',
+        action='store_true',
+        help='Show current configuration with sources'
+    )
+
+    parser.add_argument(
+        '--validate-config',
+        action='store_true',
+        help='Validate configuration file'
+    )
+
+    parser.add_argument(
+        '--generate-config',
+        action='store_true',
+        help='Generate default configuration file'
+    )
+
+    parser.add_argument(
+        '--reset-config',
+        action='store_true',
+        help='Reset configuration to defaults (creates backup)'
+    )
+
+    parser.add_argument(
+        '--setup',
+        action='store_true',
+        help='Launch interactive configuration wizard'
+    )
+
+    parser.add_argument(
+        '--encrypt-value',
+        type=str,
+        metavar='VALUE',
+        help='Encrypt a value for use in configuration'
+    )
+
+    parser.add_argument(
+        '--rotate-key',
+        action='store_true',
+        help='Rotate encryption key and re-encrypt sensitive fields'
+    )
+
+    parser.add_argument(
+        '--test-config',
+        action='store_true',
+        help='Run comprehensive configuration tests'
+    )
+
+    parser.add_argument(
+        '--config-help',
+        action='store_true',
+        help='Show configuration help and documentation'
+    )
+
+    parser.add_argument(
+        '--config-schema',
+        action='store_true',
+        help='Output JSON schema for configuration'
+    )
+
     args = parser.parse_args()
+
+    # Check for configuration management commands first (before mode determination)
+    from src.config import config_cli
+
+    if args.show_config:
+        return config_cli.show_config_command(mask_sensitive=True)
+
+    if args.validate_config:
+        return config_cli.validate_config_command()
+
+    if args.generate_config:
+        return config_cli.generate_config_command()
+
+    if args.reset_config:
+        return config_cli.reset_config_command()
+
+    if args.setup:
+        return config_cli.setup_command()
+
+    if args.encrypt_value:
+        return config_cli.encrypt_value_command(args.encrypt_value)
+
+    if args.rotate_key:
+        return config_cli.rotate_key_command()
+
+    if args.test_config:
+        return config_cli.test_config_command()
+
+    if args.config_help:
+        return config_cli.config_help_command()
+
+    if args.config_schema:
+        return config_cli.config_schema_command()
 
     # Determine mode: GUI is default if no CLI-specific args
     cli_mode = args.cli or args.discover_ports or args.command
