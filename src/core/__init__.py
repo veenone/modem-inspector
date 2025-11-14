@@ -15,6 +15,7 @@ from src.core.exceptions import (
 )
 from src.core.serial_handler import SerialHandler, PortInfo
 from src.core.at_executor import ATExecutor
+from src.core.multi_modem_executor import MultiModemExecutor, ModemConnection
 
 __all__ = [
     'CommandResponse',
@@ -22,6 +23,8 @@ __all__ = [
     'SerialHandler',
     'PortInfo',
     'ATExecutor',
+    'MultiModemExecutor',
+    'ModemConnection',
     'ModemInspectorError',
     'SerialPortError',
     'SerialPortBusyError',

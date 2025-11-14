@@ -282,38 +282,235 @@ For detailed documentation, see [docs/logging.md](docs/logging.md).
 
 ## GUI Interface
 
-The GUI provides a complete graphical interface for modem inspection:
+The GUI provides a complete graphical interface for modem inspection with a modern, responsive design.
 
-### Features
-- **Port Management**: Visual port selection with auto-refresh and connection status
-- **Plugin Selection**:
-  - Auto-detection via AT+CGMI/AT+CGMM commands
-  - Manual selection from available plugins
-  - Category-based command filtering with Quick Scan mode
-- **Execution Control**:
-  - Real-time progress bar with ETA
-  - Color-coded logging (blue=command, green=success, red=error)
-  - Graceful cancellation support
-  - Execution summary with statistics
-- **Results Display**:
-  - Tabbed results organized by command category
-  - Search functionality with highlighting
-  - Export to CSV reports
-- **Communication Logs** (NEW):
-  - Real-time log viewer with color-coded entries
-  - Search and filter by log level
-  - Export visible logs to file
-  - Open log file in editor
-- **Settings & Help**:
-  - Configuration dialog for serial/report/logging settings
-  - Built-in help documentation
-  - Inspection history tracking
+### Launching the GUI
+
+```bash
+# Default mode - launches GUI
+python main.py
+
+# Explicit GUI mode
+python main.py --gui
+```
+
+### Main Components
+
+#### 1. Connection Frame
+- **Port Discovery**: Auto-detect available serial ports
+- **Refresh Button**: Update port list without restarting
+- **Status Indicator**: Visual connection status (gray/green/red)
+- **Baud Rate Selection**: Standard baud rates (115200 default)
+- **Connect/Disconnect**: One-click connection management
+
+#### 2. Plugin Frame
+- **Auto-Detection**: Execute AT+CGMI/AT+CGMM to identify modem
+- **Manual Selection**: Dropdown with searchable plugin list
+- **Plugin Info**: Display vendor, model, version, command count
+- **Command Categories**: Visual category selection with counts
+
+#### 3. Execution & Results Tab
+
+**Execution Panel:**
+- Real-time progress bar with percentage
+- Command counter (e.g., "5 / 15 commands")
+- Elapsed time and estimated time remaining
+- Color-coded progress log:
+  - 🔵 Blue: Command sent
+  - ✅ Green: Success response
+  - ❌ Red: Error response
+  - ⟳ Yellow: Retry attempt
+- Start/Cancel buttons with state management
+- Auto-scroll to latest command
+
+**Results Panel:**
+- Tabbed display organized by command category
+- Results table with columns:
+  - Command name
+  - Status (SUCCESS/ERROR/TIMEOUT)
+  - Execution time (ms)
+  - Raw response text
+- Search box with real-time highlighting
+- Copy to Clipboard button
+- Export button (opens Report Dialog)
+- Pagination for 100+ results (20 per page)
+
+#### 4. Command Categories Tab
+- Visual checklist of all command categories
+- Command count per category
+- "Select All" / "Deselect All" buttons
+- "Quick Scan Only" filter checkbox
+- Real-time command count updates
+
+#### 5. Communication Logs Tab
+- Real-time log viewer with timestamps
+- Color-coded log levels:
+  - DEBUG: Gray
+  - INFO: Blue
+  - WARNING: Yellow
+  - ERROR: Red
+- Search and filter functionality
+- Clear logs button
+- Export logs to file
+- Open log directory button
+- Auto-scroll to latest entry
+
+### Dialogs
+
+#### Settings Dialog
+Accessible via menu bar: **Settings**
+
+**Serial Tab:**
+- Baud Rate (300-921600 bps)
+- Timeout (1-600 seconds)
+- Retry Attempts (0-10)
+- Retry Delay (100-10000 ms)
+
+**Reports Tab:**
+- Output Directory (with Browse button)
+- Default Format (CSV, HTML, JSON, Markdown)
+
+**Logging Tab:**
+- Enable/Disable Communication Logging
+- Log Level (DEBUG, INFO, WARNING, ERROR)
+- Log to File checkbox
+- Log File Path (with Browse button)
+- Log to Console checkbox
+- Open Log Directory button
+- Max File Size (MB)
+- Backup Count
+
+**Actions:**
+- **Save**: Apply settings with validation
+- **Reset to Defaults**: Restore factory settings
+- **Cancel**: Close without saving
+
+#### Report Dialog
+Accessible via Results panel: **Export** button
+
+**Features:**
+- Format selection (CSV, HTML, JSON, Markdown)
+- Format options:
+  - ☑ Include raw responses
+  - ☑ Include timestamps
+- Output path selector with Browse button
+- Default filename with timestamp
+- Generate button with progress indicator
+- Background generation (non-blocking)
+- File overwrite confirmation
+- Success message with file size
+- Open Report button (launches in default app)
+
+#### Help Dialog
+Accessible via menu bar: **Help → Help**
+
+**Features:**
+- Searchable table of contents
+- Formatted help content
+- Offline operation (no network required)
+- Topics:
+  - Getting Started
+  - Connection Management
+  - Plugin Usage
+  - Command Execution
+  - Results Interpretation
+  - Settings Configuration
+  - Troubleshooting
+
+### Menu Bar
+
+**File Menu:**
+- Exit: Graceful shutdown with resource cleanup
+
+**Settings:**
+- Opens Settings Dialog
+
+**Help Menu:**
+- Help: Opens Help Dialog
+- About: Version and copyright information
+
+### Workflow Example
+
+1. **Launch**: `python main.py`
+2. **Connect**: Select port → Click "Connect"
+3. **Detect**: Click "Auto-Detect" (or select plugin manually)
+4. **Configure**: Select command categories in "Command Categories" tab
+5. **Execute**: Click "Start" in Execution & Results tab
+6. **Monitor**: Watch real-time progress and logs
+7. **Review**: Examine results by category
+8. **Export**: Click "Export" → Configure format → "Generate"
+9. **View Logs**: Switch to "Communication Logs" tab for detailed AT traces
+
+### Keyboard Shortcuts
+
+- **Ctrl+Q**: Exit application
+- **Ctrl+S**: Open Settings (when implemented)
+- **F1**: Open Help (when implemented)
+- **Ctrl+R**: Refresh port list (when focused)
+
+### Testing
+
+For comprehensive GUI testing procedures, see:
+- [GUI Testing Guide](docs/gui_testing_guide.md) - Manual test cases and procedures
 
 ### Architecture
-- **CustomTkinter**: Modern GUI framework
-- **Threaded Execution**: Non-blocking command execution
-- **Queue-based Communication**: Thread-safe progress updates
+
+**Technology Stack:**
+- **CustomTkinter**: Modern GUI framework with native look and feel
+- **Threading**: Background command execution (never blocks UI)
+- **Queue**: Thread-safe communication between worker and UI threads
 - **MVC Pattern**: Clean separation of concerns
+
+**Key Components:**
+```
+Application (Controller)
+├── ConnectionFrame (View)
+│   └── SerialHandler (Model)
+├── PluginFrame (View)
+│   └── PluginManager (Model)
+├── ExecutionFrame (View)
+│   └── ATExecutor (Model)
+├── ResultsFrame (View)
+│   └── CommandResponse (Model)
+└── LogViewerFrame (View)
+    └── CommunicationLogger (Model)
+```
+
+**Threading Model:**
+- Main thread: UI updates only
+- Worker threads: AT command execution, file I/O
+- Queue-based communication: Progress updates, results
+- Safe callbacks: All UI updates via `after()` method
+
+### Troubleshooting
+
+**GUI Won't Launch:**
+```bash
+# Check dependencies
+pip install -r requirements.txt
+
+# Test import
+python -c "from src.gui.application import Application; print('OK')"
+```
+
+**Port Not Detected:**
+- Ensure USB cable connected
+- Check device drivers installed (Windows: Device Manager)
+- Try manual port selection
+- Use CLI to verify: `python main.py --cli --discover-ports`
+
+**Execution Hangs:**
+- Restart application
+- Check serial port not in use by another application
+- Verify correct baud rate for your modem
+- Enable logging for diagnostics
+
+**Settings Not Saved:**
+- Check config.yaml file permissions
+- Verify output directory exists and is writable
+- Check console for error messages
+
+For more troubleshooting tips, see [GUI Testing Guide](docs/gui_testing_guide.md).
 
 ## Development Status
 

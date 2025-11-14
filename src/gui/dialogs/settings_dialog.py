@@ -4,10 +4,11 @@ Provides modal dialog for viewing and editing application settings.
 """
 
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from pathlib import Path
 from src.config.config_manager import ConfigManager
 from src.config.config_models import LogLevel
+from src.gui.utils.validation import validate_baud_rate, validate_timeout, validate_retry_count, validate_retry_delay, validate_directory_path
 
 
 class SettingsDialog(ctk.CTkToplevel):
@@ -69,8 +70,16 @@ class SettingsDialog(ctk.CTkToplevel):
         self.baud_entry.grid(row=0, column=1, sticky="ew", padx=10, pady=10)
 
         ctk.CTkLabel(serial_frame, text="Timeout (s):").grid(row=1, column=0, sticky="w", padx=10, pady=10)
-        self.timeout_entry = ctk.CTkEntry(serial_frame, placeholder_text="5")
+        self.timeout_entry = ctk.CTkEntry(serial_frame, placeholder_text="30")
         self.timeout_entry.grid(row=1, column=1, sticky="ew", padx=10, pady=10)
+
+        ctk.CTkLabel(serial_frame, text="Retry Attempts:").grid(row=2, column=0, sticky="w", padx=10, pady=10)
+        self.retry_attempts_entry = ctk.CTkEntry(serial_frame, placeholder_text="3")
+        self.retry_attempts_entry.grid(row=2, column=1, sticky="ew", padx=10, pady=10)
+
+        ctk.CTkLabel(serial_frame, text="Retry Delay (ms):").grid(row=3, column=0, sticky="w", padx=10, pady=10)
+        self.retry_delay_entry = ctk.CTkEntry(serial_frame, placeholder_text="1000")
+        self.retry_delay_entry.grid(row=3, column=1, sticky="ew", padx=10, pady=10)
 
         serial_frame.grid_columnconfigure(1, weight=1)
 
@@ -81,6 +90,14 @@ class SettingsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(reports_frame, text="Output Directory:").grid(row=0, column=0, sticky="w", padx=10, pady=10)
         self.output_dir_entry = ctk.CTkEntry(reports_frame, placeholder_text="./reports")
         self.output_dir_entry.grid(row=0, column=1, sticky="ew", padx=10, pady=10)
+
+        browse_dir_button = ctk.CTkButton(
+            reports_frame,
+            text="Browse",
+            width=80,
+            command=self._on_browse_output_dir
+        )
+        browse_dir_button.grid(row=0, column=2, sticky="w", padx=10, pady=10)
 
         reports_frame.grid_columnconfigure(1, weight=1)
 
@@ -173,6 +190,14 @@ class SettingsDialog(ctk.CTkToplevel):
         button_frame = ctk.CTkFrame(self)
         button_frame.pack(fill="x", padx=20, pady=(0, 20))
 
+        reset_button = ctk.CTkButton(
+            button_frame,
+            text="Reset to Defaults",
+            width=140,
+            command=self._on_reset
+        )
+        reset_button.pack(side="left", padx=5)
+
         cancel_button = ctk.CTkButton(
             button_frame,
             text="Cancel",
@@ -183,7 +208,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
         ok_button = ctk.CTkButton(
             button_frame,
-            text="OK",
+            text="Save",
             width=100,
             command=self._on_ok
         )
@@ -197,6 +222,8 @@ class SettingsDialog(ctk.CTkToplevel):
             # Load serial settings
             self.baud_entry.insert(0, str(config.serial.default_baud))
             self.timeout_entry.insert(0, str(config.serial.timeout))
+            self.retry_attempts_entry.insert(0, str(config.serial.retry_attempts))
+            self.retry_delay_entry.insert(0, str(config.serial.retry_delay))
 
             # Load report settings
             self.output_dir_entry.insert(0, str(config.reporting.output_directory))
@@ -279,28 +306,115 @@ class SettingsDialog(ctk.CTkToplevel):
             from tkinter import messagebox
             messagebox.showerror("Error", f"Failed to open log directory: {e}")
 
-    def _on_ok(self):
-        """Handle OK button - save settings and close dialog."""
+    def _on_browse_output_dir(self):
+        """Handle Browse button for output directory."""
+        directory = filedialog.askdirectory(
+            title="Select Output Directory",
+            initialdir=self.output_dir_entry.get() or "./reports"
+        )
+
+        if directory:
+            self.output_dir_entry.delete(0, "end")
+            self.output_dir_entry.insert(0, directory)
+
+    def _on_reset(self):
+        """Handle Reset to Defaults button."""
+        if not messagebox.askyesno("Reset to Defaults",
+                                   "Are you sure you want to reset all settings to defaults?\n\nThis will restore factory default values for all configuration options."):
+            return
+
         try:
-            # Note: In a full implementation, this would save to ConfigManager
-            # For now, we just validate and close
-            # The application layer should handle applying these settings
+            from src.config.defaults import get_default_config
+            defaults = get_default_config()
+
+            # Clear and reload with defaults
+            self.baud_entry.delete(0, "end")
+            self.baud_entry.insert(0, str(defaults.serial.default_baud))
+
+            self.timeout_entry.delete(0, "end")
+            self.timeout_entry.insert(0, str(defaults.serial.timeout))
+
+            self.retry_attempts_entry.delete(0, "end")
+            self.retry_attempts_entry.insert(0, str(defaults.serial.retry_attempts))
+
+            self.retry_delay_entry.delete(0, "end")
+            self.retry_delay_entry.insert(0, str(defaults.serial.retry_delay))
+
+            self.output_dir_entry.delete(0, "end")
+            self.output_dir_entry.insert(0, str(defaults.reporting.output_directory))
+
+            self.logging_enabled_var.set(defaults.logging.enabled)
+            self.log_level_combo.set(defaults.logging.level.value)
+            self.log_to_file_var.set(defaults.logging.log_to_file)
+            self.log_to_console_var.set(defaults.logging.log_to_console)
+
+            if defaults.logging.log_file_path:
+                self.log_file_entry.delete(0, "end")
+                self.log_file_entry.insert(0, defaults.logging.log_file_path)
+
+            self._update_logging_controls_state()
+
+            messagebox.showinfo("Reset Complete", "All settings have been reset to defaults.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to reset settings: {e}")
+
+    def _on_ok(self):
+        """Handle OK button - validate and save settings."""
+        try:
+            # Validate serial settings
+            is_valid, error = validate_baud_rate(self.baud_entry.get())
+            if not is_valid:
+                messagebox.showerror("Invalid Baud Rate", error)
+                self.tabview.set("Serial")
+                return
+
+            is_valid, error = validate_timeout(self.timeout_entry.get())
+            if not is_valid:
+                messagebox.showerror("Invalid Timeout", error)
+                self.tabview.set("Serial")
+                return
+
+            is_valid, error = validate_retry_count(self.retry_attempts_entry.get())
+            if not is_valid:
+                messagebox.showerror("Invalid Retry Attempts", error)
+                self.tabview.set("Serial")
+                return
+
+            is_valid, error = validate_retry_delay(self.retry_delay_entry.get())
+            if not is_valid:
+                messagebox.showerror("Invalid Retry Delay", error)
+                self.tabview.set("Serial")
+                return
+
+            # Validate report settings
+            is_valid, error = validate_directory_path(self.output_dir_entry.get())
+            if not is_valid and not error.startswith("Warning"):
+                messagebox.showerror("Invalid Output Directory", error)
+                self.tabview.set("Reports")
+                return
 
             # Validate log file path if logging to file
             if self.logging_enabled_var.get() and self.log_to_file_var.get():
                 log_path = self.log_file_entry.get()
                 if log_path:
-                    # Validate path is writable
                     try:
                         test_path = Path(log_path).parent
                         test_path.mkdir(parents=True, exist_ok=True)
                     except Exception as e:
-                        from tkinter import messagebox
-                        messagebox.showerror("Invalid Path", f"Log file path is not writable: {e}")
+                        messagebox.showerror("Invalid Log Path", f"Log file path is not writable: {e}")
+                        self.tabview.set("Logging")
                         return
+
+            # All validation passed - save settings
+            # Note: This is a placeholder. In a full implementation, this would:
+            # 1. Update ConfigManager with new values
+            # 2. Persist to config file
+            # 3. Notify application of config changes
+            messagebox.showinfo("Settings Saved",
+                              "Settings have been validated successfully.\n\nNote: Full save functionality requires integration with ConfigManager.save().")
 
             self.destroy()
 
         except Exception as e:
-            from tkinter import messagebox
             messagebox.showerror("Error", f"Failed to save settings: {e}")

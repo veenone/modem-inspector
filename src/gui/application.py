@@ -5,6 +5,7 @@ managing application lifecycle.
 """
 
 import customtkinter as ctk
+import tkinter as tk
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
@@ -43,6 +44,13 @@ class Application(ctk.CTk):
         self.plugin_manager = PluginManager()
         self.history_manager = HistoryManager()
 
+        # Discover plugins on startup
+        try:
+            self.plugin_manager.discover_plugins()
+            print(f"Discovered {len(self.plugin_manager.get_all_plugins())} plugins")
+        except Exception as e:
+            print(f"Warning: Plugin discovery failed: {e}")
+
         # State
         self.serial_handler: Optional[SerialHandler] = None
         self.at_executor: Optional[ATExecutor] = None
@@ -60,6 +68,12 @@ class Application(ctk.CTk):
         # Setup UI
         self._setup_ui()
         self._setup_menu()
+
+        # Load and display recent history
+        self._load_recent_history()
+
+        # Set window close protocol
+        self.protocol("WM_DELETE_WINDOW", self._on_exit)
 
     def _setup_ui(self):
         """Set up UI layout."""
@@ -135,10 +149,67 @@ class Application(ctk.CTk):
         self.plugin_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
 
     def _setup_menu(self):
-        """Setup menu bar (simplified)."""
-        # Note: CustomTkinter doesn't have built-in menu bar
-        # In a full implementation, would use tkinter Menu or custom buttons
-        pass
+        """Setup menu bar."""
+        # Create menu bar using tkinter.Menu (CustomTkinter doesn't have native menu support)
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Exit", command=self._on_exit)
+
+        # Settings menu
+        menubar.add_command(label="Settings", command=self.show_settings)
+
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="Help", command=self.show_help)
+        help_menu.add_separator()
+        help_menu.add_command(label="About", command=self._show_about)
+
+    def _on_exit(self):
+        """Handle application exit."""
+        # Cleanup resources
+        if self.serial_handler:
+            try:
+                self.serial_handler.close()
+            except Exception:
+                pass
+
+        if self.logger:
+            try:
+                self.logger.close()
+            except Exception:
+                pass
+
+        # Close window
+        self.quit()
+        self.destroy()
+
+    def _show_about(self):
+        """Show about dialog."""
+        from tkinter import messagebox
+        messagebox.showinfo(
+            "About Modem Inspector",
+            "Modem Inspector - GUI\n\n"
+            "Version: 1.0.0\n\n"
+            "A comprehensive tool for inspecting and analyzing modem capabilities "
+            "through AT command execution and plugin-based feature detection.\n\n"
+            "© 2024 Modem Inspector Project"
+        )
+
+    def _load_recent_history(self):
+        """Load and display recent inspection history."""
+        try:
+            history = self.history_manager.load_history()
+            if history:
+                print(f"Loaded {len(history)} recent inspections")
+                # Could display in a status bar or recent inspections panel
+                # For now, just log to console
+        except Exception as e:
+            print(f"Warning: Failed to load history: {e}")
 
     def _initialize_logger(self):
         """Initialize communication logger based on config settings."""
