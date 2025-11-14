@@ -264,6 +264,85 @@ Examples:
         help='Output JSON schema for configuration'
     )
 
+    # Plugin management arguments
+    parser.add_argument(
+        '--list-plugins',
+        action='store_true',
+        help='List all discovered plugins'
+    )
+
+    parser.add_argument(
+        '--plugin-info',
+        type=str,
+        metavar='VENDOR.MODEL',
+        help='Show detailed information about a specific plugin (e.g., quectel.ec200u)'
+    )
+
+    parser.add_argument(
+        '--validate-plugin',
+        type=str,
+        metavar='FILE',
+        help='Validate a plugin YAML file'
+    )
+
+    parser.add_argument(
+        '--test-plugin',
+        type=str,
+        metavar='FILE',
+        help='Test plugin against real hardware (requires --port)'
+    )
+
+    parser.add_argument(
+        '--validate-all-plugins',
+        action='store_true',
+        help='Validate all plugins in plugin directories'
+    )
+
+    parser.add_argument(
+        '--vendor',
+        type=str,
+        help='Filter plugins by vendor (use with --list-plugins)'
+    )
+
+    parser.add_argument(
+        '--category',
+        type=str,
+        help='Filter plugins by category (use with --list-plugins)'
+    )
+
+    parser.add_argument(
+        '--create-plugin-template',
+        nargs=2,
+        metavar=('VENDOR', 'MODEL'),
+        help='Generate a plugin template (e.g., --create-plugin-template myvendor mymodel)'
+    )
+
+    parser.add_argument(
+        '--plugin-category',
+        type=str,
+        default='other',
+        help='Category for template generation (default: other)'
+    )
+
+    parser.add_argument(
+        '--output',
+        type=str,
+        metavar='FILE',
+        help='Output file path for template generation'
+    )
+
+    parser.add_argument(
+        '--author',
+        type=str,
+        help='Author name for plugin template'
+    )
+
+    parser.add_argument(
+        '--overwrite',
+        action='store_true',
+        help='Overwrite existing file (use with --create-plugin-template)'
+    )
+
     args = parser.parse_args()
 
     # Check for configuration management commands first (before mode determination)
@@ -298,6 +377,38 @@ Examples:
 
     if args.config_schema:
         return config_cli.config_schema_command()
+
+    # Check for plugin management commands
+    from src.core import plugin_cli
+
+    if args.list_plugins:
+        return plugin_cli.list_plugins_command(vendor=args.vendor, category=args.category)
+
+    if args.plugin_info:
+        return plugin_cli.plugin_info_command(args.plugin_info)
+
+    if args.validate_plugin:
+        return plugin_cli.validate_plugin_command(args.validate_plugin)
+
+    if args.test_plugin:
+        if not args.port:
+            print("Error: --test-plugin requires --port argument", file=sys.stderr)
+            return 1
+        return plugin_cli.test_plugin_command(args.test_plugin, args.port, args.baud)
+
+    if args.validate_all_plugins:
+        return plugin_cli.validate_all_plugins_command()
+
+    if args.create_plugin_template:
+        vendor, model = args.create_plugin_template
+        return plugin_cli.create_plugin_template_command(
+            vendor=vendor,
+            model=model,
+            category=args.plugin_category,
+            output_path=args.output,
+            author=args.author,
+            overwrite=args.overwrite
+        )
 
     # Determine mode: GUI is default if no CLI-specific args
     cli_mode = args.cli or args.discover_ports or args.command

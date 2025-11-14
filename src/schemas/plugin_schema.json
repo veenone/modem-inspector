@@ -1,0 +1,284 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://modem-inspector.org/schemas/plugin-v1.0.json",
+  "title": "Modem Inspector Plugin Schema",
+  "description": "JSON Schema for validating modem plugin YAML definitions",
+  "type": "object",
+  "required": ["metadata", "connection", "commands"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "Plugin identification and versioning information",
+      "required": ["vendor", "model", "category", "version"],
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "description": "Modem vendor name (lowercase, e.g., 'quectel', 'nordic', 'simcom')",
+          "pattern": "^[a-z0-9_-]+$",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "model": {
+          "type": "string",
+          "description": "Modem model identifier (lowercase, e.g., 'ec200u', 'nrf9160')",
+          "pattern": "^[a-z0-9_-]+$",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "category": {
+          "type": "string",
+          "description": "Modem category for feature-based filtering",
+          "enum": ["5g_highperf", "lte_cat1", "automotive", "iot", "nbiot", "other"]
+        },
+        "version": {
+          "type": "string",
+          "description": "Plugin semantic version (X.Y.Z format)",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "author": {
+          "type": "string",
+          "description": "Plugin author name (optional)"
+        },
+        "compatible_with": {
+          "type": "string",
+          "description": "Inspector version compatibility (e.g., 'inspector_v1.0+')",
+          "pattern": "^inspector_v\\d+\\.\\d+\\+?$"
+        },
+        "variants": {
+          "type": "array",
+          "description": "List of model variants supported by this plugin",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "connection": {
+      "type": "object",
+      "description": "Serial connection configuration for the modem",
+      "properties": {
+        "default_baud": {
+          "type": "integer",
+          "description": "Default baud rate for serial communication",
+          "enum": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+          "default": 115200
+        },
+        "data_bits": {
+          "type": "integer",
+          "description": "Number of data bits",
+          "enum": [5, 6, 7, 8],
+          "default": 8
+        },
+        "parity": {
+          "type": "string",
+          "description": "Parity setting: N=None, E=Even, O=Odd",
+          "enum": ["N", "E", "O"],
+          "default": "N"
+        },
+        "stop_bits": {
+          "type": "integer",
+          "description": "Number of stop bits",
+          "enum": [1, 2],
+          "default": 1
+        },
+        "flow_control": {
+          "type": "boolean",
+          "description": "Enable hardware flow control (RTS/CTS)",
+          "default": false
+        },
+        "init_sequence": {
+          "type": "array",
+          "description": "Initialization command sequence executed before inspection",
+          "items": {
+            "type": "object",
+            "required": ["cmd", "expected"],
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "description": "AT command to execute",
+                "pattern": "^AT[\\+\\*\\$]?[A-Z0-9\\?=;,]*$"
+              },
+              "expected": {
+                "type": "string",
+                "description": "Expected response substring (e.g., 'OK')"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "commands": {
+      "type": "object",
+      "description": "Command definitions organized by category",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "array",
+          "description": "Array of command definitions for this category",
+          "items": {
+            "type": "object",
+            "required": ["cmd", "description", "category"],
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "description": "AT command string (must start with 'AT')",
+                "pattern": "^AT[\\+\\*\\$%]?[A-Za-z0-9\\?=;,&:\"\\s]*$",
+                "minLength": 2
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable command description",
+                "minLength": 5
+              },
+              "category": {
+                "type": "string",
+                "description": "Command category (must match parent key)",
+                "pattern": "^[a-z_]+$"
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Command timeout in seconds (overrides default)",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "parser": {
+                "type": "string",
+                "description": "Name of parser to use for response (must be defined in parsers section)",
+                "pattern": "^[a-z0-9_]+$"
+              },
+              "critical": {
+                "type": "boolean",
+                "description": "If true, command failure is critical (default: false)",
+                "default": false
+              },
+              "quick": {
+                "type": "boolean",
+                "description": "If true, include in quick scan mode (default: false)",
+                "default": false
+              },
+              "expected_format": {
+                "type": "string",
+                "description": "Expected response format (for documentation/validation)"
+              }
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "parsers": {
+      "type": "object",
+      "description": "Parser definitions for extracting structured data from responses",
+      "patternProperties": {
+        "^[a-z0-9_]+$": {
+          "type": "object",
+          "required": ["name", "type"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Parser identifier (must match key)",
+              "pattern": "^[a-z0-9_]+$"
+            },
+            "type": {
+              "type": "string",
+              "description": "Parser type: regex, json, custom, or none",
+              "enum": ["regex", "json", "custom", "none"]
+            },
+            "pattern": {
+              "type": "string",
+              "description": "Regular expression pattern (required for regex type)"
+            },
+            "groups": {
+              "type": "array",
+              "description": "Named capture group names for regex parser",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "json_path": {
+              "type": "string",
+              "description": "JSON path expression (for json type)"
+            },
+            "module": {
+              "type": "string",
+              "description": "Python module path for custom parser (e.g., 'parsers.custom.my_parser')",
+              "pattern": "^[a-z0-9_.]+$"
+            },
+            "function": {
+              "type": "string",
+              "description": "Function name in module for custom parser",
+              "pattern": "^[a-z0-9_]+$"
+            },
+            "output_format": {
+              "type": "string",
+              "description": "Output format: dict, list, or string",
+              "enum": ["dict", "list", "string"],
+              "default": "dict"
+            },
+            "unit": {
+              "type": "string",
+              "description": "Measurement unit for parsed value (e.g., 'dBm', 'MHz')"
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": { "type": { "const": "regex" } }
+              },
+              "then": {
+                "required": ["pattern"]
+              }
+            },
+            {
+              "if": {
+                "properties": { "type": { "const": "custom" } }
+              },
+              "then": {
+                "required": ["module", "function"]
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "validation": {
+      "type": "object",
+      "description": "Validation rules for plugin testing",
+      "properties": {
+        "required_responses": {
+          "type": "array",
+          "description": "List of commands that must succeed for valid modem identification",
+          "items": {
+            "type": "string",
+            "pattern": "^AT[\\+\\*\\$]?[A-Z0-9\\?=;,&]*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "expected_manufacturer": {
+          "type": "string",
+          "description": "Expected manufacturer string from AT+CGMI command"
+        },
+        "expected_model_pattern": {
+          "type": "string",
+          "description": "Regex pattern for expected model string from AT+CGMM"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

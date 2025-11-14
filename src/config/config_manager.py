@@ -5,10 +5,14 @@ defaults, file loading, and environment variable overrides.
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Callable
 import os
 import yaml
 from copy import deepcopy
+import signal
+import threading
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler, FileModifiedEvent
 
 from src.config.config_models import (
     Config,
@@ -29,6 +33,55 @@ from src.config.config_schema import ConfigSchema
 from src.config.config_encryption import ConfigEncryption
 
 
+class ConfigFileEventHandler(FileSystemEventHandler):
+    """File system event handler for config.yaml changes."""
+
+    def __init__(self, config_manager: 'ConfigManager', config_path: Path):
+        """Initialize event handler.
+
+        Args:
+            config_manager: ConfigManager instance to reload.
+            config_path: Path to config.yaml being watched.
+        """
+        super().__init__()
+        self.config_manager = config_manager
+        self.config_path = config_path
+        self._last_reload_time = 0
+        self._debounce_seconds = 2.0  # Debounce to avoid multiple reloads
+
+    def on_modified(self, event):
+        """Handle file modification events.
+
+        Args:
+            event: File system event.
+        """
+        # Only react to config.yaml modifications
+        if not isinstance(event, FileModifiedEvent):
+            return
+
+        event_path = Path(event.src_path).resolve()
+        config_path = self.config_path.resolve()
+
+        if event_path != config_path:
+            return
+
+        # Debounce: avoid multiple reloads for same change
+        import time
+        current_time = time.time()
+        if current_time - self._last_reload_time < self._debounce_seconds:
+            return
+
+        self._last_reload_time = current_time
+
+        # Reload configuration
+        print(f"Configuration file changed: {self.config_path}")
+        success = self.config_manager.reload(self.config_path)
+        if success:
+            print("Configuration reloaded successfully")
+        else:
+            print("Configuration reload failed - using previous configuration")
+
+
 class ConfigManager:
     """Singleton configuration manager.
 
@@ -44,6 +97,11 @@ class ConfigManager:
     _instance: Optional['ConfigManager'] = None
     _config: Optional[Config] = None
     _config_source: Dict[str, str] = {}  # Track source of each config value
+    _config_path: Optional[Path] = None  # Path to loaded config file
+    _file_observer: Optional[Observer] = None  # File watcher observer
+    _watch_enabled: bool = False  # Whether file watching is enabled
+    _reload_callbacks: List[Callable[[], None]] = []  # Callbacks on successful reload
+    _reload_error_callbacks: List[Callable[[str], None]] = []  # Callbacks on failed reload
 
     def __init__(self):
         """Private constructor. Use instance() or initialize() class methods."""
@@ -67,12 +125,14 @@ class ConfigManager:
     @classmethod
     def initialize(cls,
                    config_path: Optional[Path] = None,
-                   skip_validation: bool = False) -> 'ConfigManager':
+                   skip_validation: bool = False,
+                   enable_hot_reload: bool = True) -> 'ConfigManager':
         """Initialize ConfigManager with configuration.
 
         Args:
             config_path: Optional path to config.yaml. If None, searches default paths.
             skip_validation: Skip schema validation (for testing or when schema not available).
+            enable_hot_reload: Enable automatic configuration reload on file changes (default: True).
 
         Returns:
             ConfigManager: Initialized singleton instance.
@@ -84,6 +144,8 @@ class ConfigManager:
             4. Validate against JSON schema
             5. Decrypt sensitive fields (if encryption enabled)
             6. Return Config object
+            7. Start file watcher if enabled
+            8. Register SIGHUP handler (Unix only)
         """
         if cls._instance is None:
             cls._instance = cls.__new__(cls)
@@ -106,6 +168,7 @@ class ConfigManager:
                 file_config = cls._load_from_file(config_path)
                 config_dict = cls._merge_configs(config_dict, file_config)
                 cls._instance._mark_source(file_config, "file")
+                cls._instance._config_path = config_path
             except Exception as e:
                 print(f"Warning: Failed to load config from {config_path}: {e}")
                 print("Using defaults only")
@@ -136,6 +199,13 @@ class ConfigManager:
 
         # Step 6: Convert dict to Config object
         cls._instance._config = cls._dict_to_config(config_dict)
+
+        # Step 7: Start file watcher if enabled and config file exists
+        if enable_hot_reload and cls._instance._config_path:
+            cls._instance.enable_hot_reload()
+
+        # Step 8: Register SIGHUP handler for manual reload (Unix only)
+        cls._instance._register_sighup_handler()
 
         return cls._instance
 
@@ -403,28 +473,58 @@ class ConfigManager:
         """Reload configuration from file and environment.
 
         Args:
-            config_path: Optional path to config.yaml. If None, searches default paths.
+            config_path: Optional path to config.yaml. If None, uses current config path or searches.
 
         Returns:
             True if reload successful, False if reload failed (config rolled back).
 
         Note:
             If new configuration is invalid, previous valid configuration is preserved.
+            Calls registered reload callbacks on successful reload.
+            Calls registered error callbacks on failed reload.
         """
+        # Use current config path if not specified
+        if config_path is None:
+            config_path = self._config_path
+
         # Save current config for rollback
         old_config = self._config
         old_source = self._config_source.copy()
+        old_config_path = self._config_path
+
+        # Temporarily disable hot reload to avoid recursion
+        was_watching = self._watch_enabled
+        if was_watching:
+            self.disable_hot_reload()
 
         try:
-            # Re-initialize with new config
-            ConfigManager.initialize(config_path, skip_validation=False)
+            # Re-initialize with new config (disable hot reload to avoid double-start)
+            ConfigManager.initialize(config_path, skip_validation=False, enable_hot_reload=False)
+
+            # Re-enable hot reload if it was enabled before
+            if was_watching and self._config_path:
+                self.enable_hot_reload()
+
+            # Call reload callbacks
+            self._call_reload_callbacks()
+
             return True
         except Exception as e:
             # Rollback to previous valid config
-            print(f"Error reloading configuration: {e}")
+            error_msg = str(e)
+            print(f"Error reloading configuration: {error_msg}")
             print("Rolling back to previous configuration")
             self._config = old_config
             self._config_source = old_source
+            self._config_path = old_config_path
+
+            # Re-enable hot reload if it was enabled before
+            if was_watching and self._config_path:
+                self.enable_hot_reload()
+
+            # Call error callbacks
+            self._call_reload_error_callbacks(error_msg)
+
             return False
 
     def validate(self) -> List[str]:
@@ -487,10 +587,167 @@ class ConfigManager:
 
         return result
 
+    def enable_hot_reload(self) -> bool:
+        """Enable automatic configuration reload on file changes.
+
+        Returns:
+            True if hot reload enabled successfully, False otherwise.
+
+        Note:
+            Requires a config file path to be set (from initialization).
+            Uses watchdog library to monitor config.yaml for changes.
+            Detects changes within 2 seconds (with debouncing).
+        """
+        if not self._config_path:
+            print("Warning: Cannot enable hot reload - no config file loaded")
+            return False
+
+        if self._watch_enabled:
+            return True  # Already enabled
+
+        try:
+            # Create event handler
+            event_handler = ConfigFileEventHandler(self, self._config_path)
+
+            # Create observer and watch config directory
+            self._file_observer = Observer()
+            watch_dir = self._config_path.parent
+            self._file_observer.schedule(event_handler, str(watch_dir), recursive=False)
+            self._file_observer.start()
+
+            self._watch_enabled = True
+            return True
+        except Exception as e:
+            print(f"Error enabling hot reload: {e}")
+            return False
+
+    def disable_hot_reload(self):
+        """Disable automatic configuration reload on file changes."""
+        if not self._watch_enabled:
+            return
+
+        if self._file_observer:
+            self._file_observer.stop()
+            self._file_observer.join(timeout=2.0)
+            self._file_observer = None
+
+        self._watch_enabled = False
+
+    def is_hot_reload_enabled(self) -> bool:
+        """Check if hot reload is currently enabled.
+
+        Returns:
+            True if hot reload is enabled, False otherwise.
+        """
+        return self._watch_enabled
+
+    def register_reload_callback(self, callback: Callable[[], None]):
+        """Register callback to be called after successful configuration reload.
+
+        Args:
+            callback: Function to call after reload. Should take no arguments.
+
+        Example:
+            def on_config_reload():
+                print("Configuration reloaded!")
+                # Update application state...
+
+            ConfigManager.instance().register_reload_callback(on_config_reload)
+        """
+        if callback not in self._reload_callbacks:
+            self._reload_callbacks.append(callback)
+
+    def unregister_reload_callback(self, callback: Callable[[], None]):
+        """Unregister a reload callback.
+
+        Args:
+            callback: Function to unregister.
+        """
+        if callback in self._reload_callbacks:
+            self._reload_callbacks.remove(callback)
+
+    def register_reload_error_callback(self, callback: Callable[[str], None]):
+        """Register callback to be called when configuration reload fails.
+
+        Args:
+            callback: Function to call on reload error. Receives error message string.
+
+        Example:
+            def on_config_reload_error(error_msg):
+                print(f"Configuration reload failed: {error_msg}")
+                # Show error notification...
+
+            ConfigManager.instance().register_reload_error_callback(on_config_reload_error)
+        """
+        if callback not in self._reload_error_callbacks:
+            self._reload_error_callbacks.append(callback)
+
+    def unregister_reload_error_callback(self, callback: Callable[[str], None]):
+        """Unregister a reload error callback.
+
+        Args:
+            callback: Function to unregister.
+        """
+        if callback in self._reload_error_callbacks:
+            self._reload_error_callbacks.remove(callback)
+
+    def _call_reload_callbacks(self):
+        """Call all registered reload callbacks."""
+        for callback in self._reload_callbacks:
+            try:
+                callback()
+            except Exception as e:
+                print(f"Error in reload callback: {e}")
+
+    def _call_reload_error_callbacks(self, error_msg: str):
+        """Call all registered reload error callbacks.
+
+        Args:
+            error_msg: Error message describing the reload failure.
+        """
+        for callback in self._reload_error_callbacks:
+            try:
+                callback(error_msg)
+            except Exception as e:
+                print(f"Error in reload error callback: {e}")
+
+    def _register_sighup_handler(self):
+        """Register SIGHUP signal handler for manual reload (Unix only).
+
+        On Unix systems, sending SIGHUP to the process will trigger a config reload.
+        Example: kill -HUP <pid>
+        """
+        # Only available on Unix systems
+        if not hasattr(signal, 'SIGHUP'):
+            return
+
+        def sighup_handler(signum, frame):
+            """Handle SIGHUP signal."""
+            print("Received SIGHUP signal - reloading configuration")
+            success = self.reload()
+            if success:
+                print("Configuration reloaded successfully via SIGHUP")
+            else:
+                print("Configuration reload failed via SIGHUP")
+
+        try:
+            signal.signal(signal.SIGHUP, sighup_handler)
+        except Exception as e:
+            print(f"Warning: Could not register SIGHUP handler: {e}")
+
     @classmethod
     def reset(cls):
         """Reset singleton instance (for testing)."""
+        # Stop file watcher if running
+        if cls._instance and cls._instance._watch_enabled:
+            cls._instance.disable_hot_reload()
+
         cls._instance = None
         cls._config = None
+        cls._config_path = None
+        cls._file_observer = None
+        cls._watch_enabled = False
+        cls._reload_callbacks = []
+        cls._reload_error_callbacks = []
         if hasattr(cls, '_config_source'):
             cls._config_source = {}

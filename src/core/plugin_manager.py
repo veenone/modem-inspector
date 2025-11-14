@@ -164,8 +164,10 @@ class PluginManager:
                     type=parser_type,
                     pattern=parser_def.get('pattern'),
                     groups=parser_def.get('groups'),
+                    json_path=parser_def.get('json_path'),
+                    module=parser_def.get('module'),
+                    function=parser_def.get('function'),
                     unit=parser_def.get('unit'),
-                    handler=parser_def.get('handler'),
                     output_format=parser_def.get('output_format')
                 )
 
@@ -175,7 +177,8 @@ class PluginManager:
                 val_data = data['validation']
                 validation = PluginValidation(
                     required_responses=val_data.get('required_responses'),
-                    expected_values=val_data.get('expected_values')
+                    expected_manufacturer=val_data.get('expected_manufacturer'),
+                    expected_model_pattern=val_data.get('expected_model_pattern')
                 )
 
             # Create plugin
@@ -232,6 +235,22 @@ class PluginManager:
 
         return None
 
+    def get_all_plugins(self) -> List[Plugin]:
+        """Get all discovered plugins.
+
+        Returns:
+            List of all Plugin objects in cache
+
+        Example:
+            >>> manager = PluginManager()
+            >>> manager.discover_plugins()
+            >>> all_plugins = manager.get_all_plugins()
+            >>> print(f"Total plugins: {len(all_plugins)}")
+        """
+        if not self._loaded:
+            self.discover_plugins()
+        return list(self._cache.values())
+
     def list_plugins(self,
                     vendor: Optional[str] = None,
                     category: Optional[str] = None) -> List[Plugin]:
@@ -251,10 +270,7 @@ class PluginManager:
             >>> for plugin in quectel_plugins:
             ...     print(f"{plugin.metadata.vendor}.{plugin.metadata.model}")
         """
-        if not self._loaded:
-            self.discover_plugins()
-
-        plugins = list(self._cache.values())
+        plugins = self.get_all_plugins()
 
         # Apply filters
         if vendor:

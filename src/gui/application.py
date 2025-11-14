@@ -14,7 +14,8 @@ from src.gui.frames.plugin_frame import PluginFrame
 from src.gui.frames.execution_frame import ExecutionFrame
 from src.gui.frames.results_frame import ResultsFrame
 from src.gui.frames.log_viewer_frame import LogViewerFrame
-from src.gui.widgets import CategoryChecklist
+from src.gui.frames.plugin_manager_frame import PluginManagerFrame
+from src.gui.widgets import CategoryChecklist, ConfigStatusWidget
 from src.gui.dialogs import SettingsDialog, ReportDialog, HelpDialog, ErrorDialog
 from src.gui.utils.history_manager import HistoryManager
 from src.core.serial_handler import SerialHandler
@@ -77,11 +78,12 @@ class Application(ctk.CTk):
 
     def _setup_ui(self):
         """Set up UI layout."""
-        # Configure grid - side-by-side layout at top, tabview below
+        # Configure grid - side-by-side layout at top, tabview below, status bar at bottom
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=0)  # Connection + Plugin (side-by-side)
         self.grid_rowconfigure(1, weight=1)  # Tabview
+        self.grid_rowconfigure(2, weight=0)  # Status bar
 
         # Bottom section: Create tabview first so we can pass category checklist to plugin frame
         self.tabview = ctk.CTkTabview(self)
@@ -131,6 +133,19 @@ class Application(ctk.CTk):
         self.log_viewer_frame = LogViewerFrame(logs_tab)
         self.log_viewer_frame.grid(row=0, column=0, sticky="nsew")
 
+        # Plugin Management tab
+        self.tabview.add("Plugin Management")
+        plugin_mgmt_tab = self.tabview.tab("Plugin Management")
+        plugin_mgmt_tab.grid_columnconfigure(0, weight=1)
+        plugin_mgmt_tab.grid_rowconfigure(0, weight=1)
+
+        # Plugin Manager Frame
+        self.plugin_manager_frame = PluginManagerFrame(
+            plugin_mgmt_tab,
+            self.plugin_manager
+        )
+        self.plugin_manager_frame.grid(row=0, column=0, sticky="nsew")
+
         # Connection Frame (left side)
         self.connection_frame = ConnectionFrame(
             self,
@@ -147,6 +162,15 @@ class Application(ctk.CTk):
             on_plugin_selected=self._on_plugin_selected
         )
         self.plugin_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+
+        # Status bar at bottom
+        self.status_bar = ctk.CTkFrame(self, height=30, fg_color=("gray85", "gray25"))
+        self.status_bar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+        self.status_bar.grid_propagate(False)
+
+        # Config status widget in status bar
+        self.config_status_widget = ConfigStatusWidget(self.status_bar)
+        self.config_status_widget.pack(side="left", padx=10, pady=5)
 
     def _setup_menu(self):
         """Setup menu bar."""

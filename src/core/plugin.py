@@ -123,16 +123,20 @@ class ParserDefinition:
         type: Parser type (REGEX, JSON, CUSTOM, NONE)
         pattern: Regex pattern for REGEX parser (optional)
         groups: Named capture group names for REGEX parser (optional)
+        json_path: JSON path expression for JSON parser (optional)
+        module: Python module path for CUSTOM parser (optional)
+        function: Function name in module for CUSTOM parser (optional)
         unit: Measurement unit to append to values (e.g., "mV", "dBm")
-        handler: Python function name for CUSTOM parser (optional)
-        output_format: Expected output format (e.g., "json", "dict")
+        output_format: Expected output format (e.g., "dict", "list", "string")
     """
     name: str
     type: ParserType
     pattern: Optional[str] = None
     groups: Optional[List[str]] = field(default=None)
+    json_path: Optional[str] = None
+    module: Optional[str] = None
+    function: Optional[str] = None
     unit: Optional[str] = None
-    handler: Optional[str] = None
     output_format: Optional[str] = None
 
 
@@ -144,9 +148,12 @@ class PluginValidation:
 
     Attributes:
         required_responses: Commands that must receive responses
-        expected_values: Command to list of valid response patterns mapping
+        expected_manufacturer: Expected manufacturer string from AT+CGMI
+        expected_model_pattern: Regex pattern for expected model from AT+CGMM
     """
     required_responses: Optional[List[str]] = field(default=None)
+    expected_manufacturer: Optional[str] = None
+    expected_model_pattern: Optional[str] = None
     expected_values: Optional[Dict[str, List[str]]] = field(default=None)
 
 

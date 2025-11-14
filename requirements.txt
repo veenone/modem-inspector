@@ -12,3 +12,6 @@ jsonschema>=4.0
 
 # For configuration encryption (AES-256-GCM)
 cryptography>=41.0.0
+
+# For configuration hot reload (file watching)
+watchdog>=3.0.0

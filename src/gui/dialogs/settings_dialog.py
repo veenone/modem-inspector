@@ -178,13 +178,57 @@ class SettingsDialog(ctk.CTkToplevel):
         # Advanced settings tab
         self.tabview.add("Advanced")
         advanced_frame = self.tabview.tab("Advanced")
+        advanced_frame.grid_columnconfigure(1, weight=1)
 
         info_label = ctk.CTkLabel(
             advanced_frame,
             text="Advanced settings are configured via config.yaml file.",
             wraplength=400
         )
-        info_label.pack(pady=20, padx=20)
+        info_label.grid(row=0, column=0, columnspan=2, pady=20, padx=20)
+
+        # Hot reload status section
+        hot_reload_frame = ctk.CTkFrame(advanced_frame)
+        hot_reload_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=10)
+        hot_reload_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            hot_reload_frame,
+            text="Hot Reload Status:",
+            font=ctk.CTkFont(weight="bold")
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=10)
+
+        self.hot_reload_status_label = ctk.CTkLabel(
+            hot_reload_frame,
+            text="Checking...",
+            text_color="gray"
+        )
+        self.hot_reload_status_label.grid(row=0, column=1, sticky="w", padx=10, pady=10)
+
+        # Config file path
+        ctk.CTkLabel(
+            hot_reload_frame,
+            text="Config File:"
+        ).grid(row=1, column=0, sticky="w", padx=10, pady=5)
+
+        self.config_path_label = ctk.CTkLabel(
+            hot_reload_frame,
+            text="Not loaded",
+            text_color="gray"
+        )
+        self.config_path_label.grid(row=1, column=1, sticky="w", padx=10, pady=5)
+
+        # Hot reload toggle button
+        self.toggle_hot_reload_button = ctk.CTkButton(
+            hot_reload_frame,
+            text="Enable Hot Reload",
+            width=150,
+            command=self._on_toggle_hot_reload
+        )
+        self.toggle_hot_reload_button.grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=10)
+
+        # Update hot reload status
+        self._update_hot_reload_status()
 
         # Buttons
         button_frame = ctk.CTkFrame(self)
@@ -217,7 +261,7 @@ class SettingsDialog(ctk.CTkToplevel):
     def _load_settings(self):
         """Load current settings."""
         try:
-            config = ConfigManager.get_config()
+            config = ConfigManager.instance().get_config()
 
             # Load serial settings
             self.baud_entry.insert(0, str(config.serial.default_baud))
@@ -358,6 +402,74 @@ class SettingsDialog(ctk.CTkToplevel):
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to reset settings: {e}")
+
+    def _update_hot_reload_status(self):
+        """Update hot reload status indicators."""
+        try:
+            config_manager = ConfigManager.instance()
+
+            # Update hot reload status
+            is_enabled = config_manager.is_hot_reload_enabled()
+            if is_enabled:
+                self.hot_reload_status_label.configure(
+                    text="✓ Enabled",
+                    text_color="green"
+                )
+                self.toggle_hot_reload_button.configure(text="Disable Hot Reload")
+            else:
+                self.hot_reload_status_label.configure(
+                    text="✗ Disabled",
+                    text_color="orange"
+                )
+                self.toggle_hot_reload_button.configure(text="Enable Hot Reload")
+
+            # Update config file path
+            if config_manager._config_path:
+                self.config_path_label.configure(
+                    text=str(config_manager._config_path),
+                    text_color="white"
+                )
+            else:
+                self.config_path_label.configure(
+                    text="Using defaults only",
+                    text_color="gray"
+                )
+
+        except RuntimeError:
+            # ConfigManager not initialized
+            self.hot_reload_status_label.configure(
+                text="Not initialized",
+                text_color="red"
+            )
+            self.config_path_label.configure(
+                text="N/A",
+                text_color="gray"
+            )
+            self.toggle_hot_reload_button.configure(state="disabled")
+
+    def _on_toggle_hot_reload(self):
+        """Handle hot reload toggle button."""
+        try:
+            config_manager = ConfigManager.instance()
+
+            if config_manager.is_hot_reload_enabled():
+                config_manager.disable_hot_reload()
+                messagebox.showinfo("Hot Reload Disabled",
+                                  "Configuration hot reload has been disabled.\n\nChanges to config.yaml will no longer be automatically detected.")
+            else:
+                success = config_manager.enable_hot_reload()
+                if success:
+                    messagebox.showinfo("Hot Reload Enabled",
+                                      "Configuration hot reload has been enabled.\n\nChanges to config.yaml will be automatically detected and applied.")
+                else:
+                    messagebox.showerror("Hot Reload Failed",
+                                       "Failed to enable hot reload.\n\nMake sure a config file is loaded.")
+
+            # Update status display
+            self._update_hot_reload_status()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to toggle hot reload: {e}")
 
     def _on_ok(self):
         """Handle OK button - validate and save settings."""
