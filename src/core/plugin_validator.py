@@ -308,12 +308,13 @@ class PluginValidator:
                     validation_errors.append(f"Model check failed: {e}")
 
         # Create test result
+        total_commands = len(passed_commands) + len(failed_commands)
         result = PluginTestResult(
             plugin_name=f"{plugin.metadata.vendor}.{plugin.metadata.model}",
-            passed_commands=passed_commands,
-            failed_commands=failed_commands,
-            validation_passed=validation_passed,
-            validation_errors=validation_errors
+            total_commands=total_commands,
+            passed=len(passed_commands),
+            failed=len(failed_commands),
+            errors=validation_errors
         )
 
         return result

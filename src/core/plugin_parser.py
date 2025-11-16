@@ -58,33 +58,36 @@ class PluginParser:
             >>> parsed = parser.parse_response(response, "signal_parser")
             >>> print(parsed['rssi'])  # 25
         """
+        # Get raw response text from CommandResponse
+        raw_text = response.get_response_text()
+
         # If no parser specified, return raw response
         if not parser_name:
-            return response.raw
+            return raw_text
 
         # Get parser definition
         parser_def = self.plugin.get_parser(parser_name)
         if not parser_def:
             print(f"Warning: Parser '{parser_name}' not found, returning raw response")
-            return response.raw
+            return raw_text
 
         # Check if response was successful
         if not response.is_successful():
-            return response.raw
+            return raw_text
 
         # Dispatch to appropriate parser
         try:
             if parser_def.type == ParserType.REGEX:
-                result = self._parse_regex(response.raw, parser_def)
+                result = self._parse_regex(raw_text, parser_def)
             elif parser_def.type == ParserType.JSON:
-                result = self._parse_json(response.raw, parser_def)
+                result = self._parse_json(raw_text, parser_def)
             elif parser_def.type == ParserType.CUSTOM:
-                result = self._parse_custom(response.raw, parser_def)
+                result = self._parse_custom(raw_text, parser_def)
             elif parser_def.type == ParserType.NONE:
-                result = response.raw
+                result = raw_text
             else:
                 print(f"Warning: Unknown parser type '{parser_def.type}', returning raw response")
-                result = response.raw
+                result = raw_text
 
             # Append unit if specified
             if parser_def.unit and isinstance(result, dict):
@@ -98,7 +101,7 @@ class PluginParser:
         except Exception as e:
             # Graceful degradation: log error and return raw response
             print(f"Warning: Parser '{parser_name}' failed: {e}")
-            return response.raw
+            return raw_text
 
     def _parse_regex(self, raw_response: str, parser_def: ParserDefinition) -> Union[Dict[str, Any], str]:
         """Parse response using regular expression.
