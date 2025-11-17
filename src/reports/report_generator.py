@@ -4,10 +4,14 @@ This module provides the main ReportGenerator class that orchestrates
 report generation across multiple formats using a factory pattern.
 """
 
+import csv
+import logging
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 from src.parsers.feature_model import ModemFeatures
 from src.reports.base_reporter import BaseReporter
@@ -15,7 +19,10 @@ from src.reports.csv_reporter import CSVReporter
 from src.reports.html_reporter import HTMLReporter
 from src.reports.json_reporter import JSONReporter
 from src.reports.markdown_reporter import MarkdownReporter
-from src.reports.report_models import ReportResult
+from src.reports.report_models import ReportResult, BatchReportResult
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 # Factory pattern mapping: format -> reporter class
@@ -405,6 +412,425 @@ class ReportGenerator:
             ['csv', 'html', 'json', 'markdown']
         """
         return list(REPORTER_CLASSES.keys())
+
+    def generate_batch(
+        self,
+        features_list: List[Tuple[str, ModemFeatures]],
+        output_directory: Path,
+        formats: List[str] = None,
+        confidence_threshold: float = 0.0,
+        parallel: bool = True,
+        max_workers: int = None,
+        **kwargs
+    ) -> BatchReportResult:
+        """Generate reports for multiple modems in batch.
+
+        Creates a timestamped batch directory and generates reports for each
+        modem in the specified formats. Supports parallel processing for
+        improved performance.
+
+        Args:
+            features_list: List of (modem_id, ModemFeatures) tuples
+            output_directory: Base output directory
+            formats: List of formats to generate (default: all supported)
+            confidence_threshold: Minimum confidence (0.0-1.0)
+            parallel: Use parallel processing (default: True)
+            max_workers: Max parallel workers (default: CPU count)
+            **kwargs: Additional reporter-specific options
+
+        Returns:
+            BatchReportResult with aggregated statistics and results
+
+        Example:
+            >>> generator = ReportGenerator()
+            >>> features_list = [
+            ...     ('modem_1', modem1_features),
+            ...     ('modem_2', modem2_features),
+            ... ]
+            >>> result = generator.generate_batch(
+            ...     features_list=features_list,
+            ...     output_directory=Path('./output'),
+            ...     formats=['csv', 'html'],
+            ...     parallel=True
+            ... )
+            >>> print(f"Success: {result.success_count}/{result.total_count}")
+        """
+        # Use all supported formats if none specified
+        if formats is None:
+            formats = self.supported_formats
+
+        # Validate all formats
+        unsupported = [fmt for fmt in formats if fmt not in self.supported_formats]
+        if unsupported:
+            raise ValueError(
+                f"Unsupported formats: {unsupported}. "
+                f"Supported formats: {self.supported_formats}"
+            )
+
+        # Use config defaults if not provided
+        if confidence_threshold == 0.0 and self._default_confidence_threshold > 0.0:
+            confidence_threshold = self._default_confidence_threshold
+
+        # Create timestamped batch directory
+        batch_dir = self._create_batch_directory(
+            base_directory=output_directory,
+            modem_count=len(features_list)
+        )
+
+        # Initialize tracking variables
+        all_report_results = []
+        failed_modems = []
+        success_count = 0
+        failure_count = 0
+
+        if parallel and len(features_list) > 1:
+            # Parallel processing with ThreadPoolExecutor
+            if max_workers is None:
+                max_workers = os.cpu_count()
+
+            logger.info(
+                f"Starting batch generation for {len(features_list)} modems "
+                f"with {max_workers} workers"
+            )
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all jobs
+                future_to_modem = {
+                    executor.submit(
+                        self._generate_single_modem_reports,
+                        modem_id=modem_id,
+                        features=features,
+                        output_directory=batch_dir,
+                        formats=formats,
+                        confidence_threshold=confidence_threshold,
+                        **kwargs
+                    ): modem_id
+                    for modem_id, features in features_list
+                }
+
+                # Process completed jobs
+                completed = 0
+                for future in as_completed(future_to_modem):
+                    modem_id = future_to_modem[future]
+                    completed += 1
+
+                    try:
+                        modem_results = future.result()
+                        all_report_results.extend(modem_results)
+
+                        # Check if all reports for this modem succeeded
+                        modem_success = all(r.success for r in modem_results)
+                        if modem_success:
+                            success_count += 1
+                        else:
+                            failure_count += 1
+                            failed_modems.append(modem_id)
+
+                        logger.info(
+                            f"Generating reports: {completed}/{len(features_list)} complete"
+                        )
+
+                    except Exception as e:
+                        failure_count += 1
+                        failed_modems.append(modem_id)
+                        logger.error(
+                            f"Failed to generate reports for {modem_id}: {e}"
+                        )
+
+        else:
+            # Sequential processing
+            logger.info(
+                f"Starting sequential batch generation for {len(features_list)} modems"
+            )
+
+            for idx, (modem_id, features) in enumerate(features_list, start=1):
+                try:
+                    modem_results = self._generate_single_modem_reports(
+                        modem_id=modem_id,
+                        features=features,
+                        output_directory=batch_dir,
+                        formats=formats,
+                        confidence_threshold=confidence_threshold,
+                        **kwargs
+                    )
+                    all_report_results.extend(modem_results)
+
+                    # Check if all reports for this modem succeeded
+                    modem_success = all(r.success for r in modem_results)
+                    if modem_success:
+                        success_count += 1
+                    else:
+                        failure_count += 1
+                        failed_modems.append(modem_id)
+
+                    logger.info(
+                        f"Generating reports: {idx}/{len(features_list)} complete"
+                    )
+
+                except Exception as e:
+                    failure_count += 1
+                    failed_modems.append(modem_id)
+                    logger.error(
+                        f"Failed to generate reports for {modem_id}: {e}"
+                    )
+
+        # Create batch result
+        batch_result = BatchReportResult(
+            output_directory=batch_dir,
+            total_count=len(features_list),
+            success_count=success_count,
+            failure_count=failure_count,
+            report_results=all_report_results,
+            failed_modems=failed_modems
+        )
+
+        # Generate batch summary report
+        summary_path = self._generate_batch_summary(
+            batch_result=batch_result,
+            output_directory=batch_dir
+        )
+
+        # Update batch result with summary path
+        # Since BatchReportResult is frozen, we need to create a new instance
+        batch_result = BatchReportResult(
+            output_directory=batch_result.output_directory,
+            total_count=batch_result.total_count,
+            success_count=batch_result.success_count,
+            failure_count=batch_result.failure_count,
+            report_results=batch_result.report_results,
+            failed_modems=batch_result.failed_modems,
+            batch_summary_path=summary_path
+        )
+
+        logger.info(
+            f"Batch generation complete: {success_count}/{len(features_list)} "
+            f"modems successful"
+        )
+
+        return batch_result
+
+    def _generate_single_modem_reports(
+        self,
+        modem_id: str,
+        features: ModemFeatures,
+        output_directory: Path,
+        formats: List[str],
+        confidence_threshold: float,
+        **kwargs
+    ) -> List[ReportResult]:
+        """Generate all format reports for a single modem.
+
+        Creates reports in all specified formats for a single modem,
+        generating appropriate filenames with modem ID and timestamps.
+
+        Args:
+            modem_id: Modem identifier
+            features: ModemFeatures from parser
+            output_directory: Output directory for reports
+            formats: List of formats to generate
+            confidence_threshold: Minimum confidence threshold
+            **kwargs: Additional reporter-specific options
+
+        Returns:
+            List of ReportResult for each format
+
+        Example:
+            >>> generator = ReportGenerator()
+            >>> results = generator._generate_single_modem_reports(
+            ...     modem_id='modem_1',
+            ...     features=features,
+            ...     output_directory=Path('./batch'),
+            ...     formats=['csv', 'html'],
+            ...     confidence_threshold=0.7
+            ... )
+            >>> print(f"Generated {len(results)} reports")
+        """
+        results = []
+
+        for fmt in formats:
+            try:
+                # Generate output path for this format
+                output_path = self._generate_output_path(
+                    output_directory=output_directory,
+                    format=fmt,
+                    modem_id=modem_id
+                )
+
+                # Get custom template if available
+                template = self._custom_templates.get(fmt)
+
+                # Generate report
+                result = self.generate_report(
+                    features=features,
+                    output_path=output_path,
+                    format=fmt,
+                    confidence_threshold=confidence_threshold,
+                    template=template,
+                    **kwargs
+                )
+
+                results.append(result)
+
+            except Exception as e:
+                # Create failed result for this format
+                error_path = output_directory / f"{modem_id}_error.{fmt}"
+                failed_result = ReportResult(
+                    output_path=error_path,
+                    format=fmt,
+                    success=False,
+                    validation_passed=False,
+                    warnings=[f"Report generation failed: {str(e)}"],
+                    file_size_bytes=0,
+                    generation_time_seconds=0.0,
+                    error_message=str(e)
+                )
+                results.append(failed_result)
+                logger.error(
+                    f"Failed to generate {fmt} report for {modem_id}: {e}"
+                )
+
+        return results
+
+    def _generate_batch_summary(
+        self,
+        batch_result: BatchReportResult,
+        output_directory: Path
+    ) -> Path:
+        """Generate batch summary report in CSV format.
+
+        Creates a summary CSV file listing all modems, formats generated,
+        success/failure counts, and generation times. Includes a summary
+        row with totals at the bottom.
+
+        Args:
+            batch_result: BatchReportResult with all report results
+            output_directory: Directory for summary report
+
+        Returns:
+            Path to generated summary CSV file
+
+        Example:
+            >>> summary_path = generator._generate_batch_summary(
+            ...     batch_result=result,
+            ...     output_directory=Path('./batch')
+            ... )
+            >>> print(f"Summary at: {summary_path}")
+        """
+        summary_path = output_directory / "_batch_summary.csv"
+
+        # Group results by modem ID
+        modem_reports = {}
+        for result in batch_result.report_results:
+            # Extract modem ID from filename
+            # Format: {modem_id}_{timestamp}.{ext}
+            filename = result.output_path.stem  # Remove extension
+            # Remove timestamp (last underscore and everything after)
+            parts = filename.rsplit('_', 2)
+            modem_id = parts[0] if parts else 'Unknown'
+
+            if modem_id not in modem_reports:
+                modem_reports[modem_id] = []
+            modem_reports[modem_id].append(result)
+
+        # Write summary CSV
+        with open(summary_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+
+            # Write header
+            writer.writerow([
+                'Modem ID',
+                'Formats',
+                'Total Reports',
+                'Successful',
+                'Failed',
+                'Generation Time (s)'
+            ])
+
+            # Write rows for each modem
+            total_reports = 0
+            total_successful = 0
+            total_failed = 0
+            total_time = 0.0
+
+            for modem_id in sorted(modem_reports.keys()):
+                reports = modem_reports[modem_id]
+                successful = sum(1 for r in reports if r.success)
+                failed = len(reports) - successful
+                gen_time = sum(r.generation_time_seconds for r in reports)
+                formats = ', '.join(sorted(set(r.format for r in reports)))
+
+                writer.writerow([
+                    modem_id,
+                    formats,
+                    len(reports),
+                    successful,
+                    failed,
+                    f"{gen_time:.2f}"
+                ])
+
+                total_reports += len(reports)
+                total_successful += successful
+                total_failed += failed
+                total_time += gen_time
+
+            # Write summary row
+            writer.writerow([])  # Empty row separator
+            writer.writerow([
+                'TOTAL',
+                f"{batch_result.total_count} modems",
+                total_reports,
+                total_successful,
+                total_failed,
+                f"{total_time:.2f}"
+            ])
+
+        logger.info(f"Batch summary written to: {summary_path}")
+        return summary_path
+
+    def _create_batch_directory(
+        self,
+        base_directory: Path,
+        modem_count: int
+    ) -> Path:
+        """Create timestamped batch directory.
+
+        Creates a directory with format:
+        {timestamp}_batch_{count}modems/
+
+        Where:
+        - timestamp: YYYYMMDD_HHMMSS
+        - count: Number of modems in batch
+
+        Args:
+            base_directory: Base directory for batch
+            modem_count: Number of modems in batch
+
+        Returns:
+            Path to created batch directory
+
+        Example:
+            >>> generator = ReportGenerator()
+            >>> batch_dir = generator._create_batch_directory(
+            ...     base_directory=Path('./output'),
+            ...     modem_count=5
+            ... )
+            >>> print(batch_dir.name)
+            20250117_143000_batch_5modems
+        """
+        # Generate timestamp: YYYYMMDD_HHMMSS
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Create directory name
+        dirname = f"{timestamp}_batch_{modem_count}modems"
+
+        # Create full path
+        batch_dir = base_directory / dirname
+
+        # Create directory
+        batch_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Created batch directory: {batch_dir}")
+        return batch_dir
 
     def __repr__(self) -> str:
         """String representation of ReportGenerator."""
