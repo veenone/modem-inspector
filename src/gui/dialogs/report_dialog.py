@@ -6,12 +6,12 @@ Provides modal dialog for selecting report format and output location.
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 import os
 import subprocess
 import platform
-from src.reports.csv_reporter import CSVReporter
+from src.reports.report_generator import ReportGenerator
 from src.gui.utils.threading_utils import WorkerThread
 
 
@@ -25,19 +25,22 @@ class ReportDialog(ctk.CTkToplevel):
         >>> dialog.wait_window()
     """
 
-    def __init__(self, parent, execution_results: List[Dict], **kwargs):
+    def __init__(self, parent, execution_results: List[Dict], modem_features: Any = None, **kwargs):
         """Initialize report dialog.
 
         Args:
             parent: Parent window
-            execution_results: List of execution result dictionaries
+            execution_results: List of execution result dictionaries (for backward compatibility)
+            modem_features: Optional ModemFeatures object from parser (preferred)
             **kwargs: Additional CTkToplevel arguments
         """
         super().__init__(parent, **kwargs)
 
         self.execution_results = execution_results
+        self.modem_features = modem_features
         self.output_path: Optional[Path] = None
         self.generated_file: Optional[Path] = None
+        self.report_generator = ReportGenerator()
 
         self.title("Generate Report")
         self.geometry("500x450")
@@ -73,12 +76,13 @@ class ReportDialog(ctk.CTkToplevel):
         format_label = ctk.CTkLabel(content_frame, text="Report Format:")
         format_label.grid(row=0, column=0, sticky="w", padx=10, pady=10)
 
-        self.format_var = ctk.StringVar(value="CSV")
+        self.format_var = ctk.StringVar(value="csv")
         format_dropdown = ctk.CTkComboBox(
             content_frame,
-            values=["CSV", "HTML (Not implemented)", "JSON (Not implemented)", "Markdown (Not implemented)"],
+            values=["csv", "html", "json", "markdown"],
             variable=self.format_var,
-            state="readonly"
+            state="readonly",
+            command=self._on_format_changed
         )
         format_dropdown.grid(row=0, column=1, columnspan=2, sticky="ew", padx=10, pady=10)
 
@@ -105,6 +109,16 @@ class ReportDialog(ctk.CTkToplevel):
         )
         include_timestamps_checkbox.pack(anchor="w", padx=5, pady=5)
 
+        # Confidence threshold
+        confidence_frame = ctk.CTkFrame(options_inner_frame)
+        confidence_frame.pack(anchor="w", padx=5, pady=5, fill="x")
+
+        ctk.CTkLabel(confidence_frame, text="Confidence threshold:").pack(side="left", padx=(0, 5))
+        self.confidence_var = ctk.StringVar(value="0.0")
+        confidence_entry = ctk.CTkEntry(confidence_frame, textvariable=self.confidence_var, width=60)
+        confidence_entry.pack(side="left", padx=(0, 5))
+        ctk.CTkLabel(confidence_frame, text="(0.0-1.0)", text_color="gray").pack(side="left")
+
         # Output path
         path_label = ctk.CTkLabel(content_frame, text="Output Path:")
         path_label.grid(row=2, column=0, sticky="w", padx=10, pady=10)
@@ -114,7 +128,8 @@ class ReportDialog(ctk.CTkToplevel):
 
         # Suggest default filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_filename = f"inspection_report_{timestamp}.csv"
+        ext = self._get_extension()
+        default_filename = f"inspection_report_{timestamp}{ext}"
         self.path_entry.insert(0, str(Path("./reports") / default_filename))
 
         browse_button = ctk.CTkButton(
@@ -170,19 +185,49 @@ class ReportDialog(ctk.CTkToplevel):
         )
         self.generate_button.pack(side="right", padx=5)
 
+    def _get_extension(self) -> str:
+        """Get file extension for selected format."""
+        format_map = {
+            'csv': '.csv',
+            'html': '.html',
+            'json': '.json',
+            'markdown': '.md'
+        }
+        return format_map.get(self.format_var.get(), '.csv')
+
+    def _get_filetypes(self):
+        """Get filetypes list for file dialog based on selected format."""
+        format_type = self.format_var.get()
+        filetypes_map = {
+            'csv': [("CSV Files", "*.csv"), ("All Files", "*.*")],
+            'html': [("HTML Files", "*.html"), ("All Files", "*.*")],
+            'json': [("JSON Files", "*.json"), ("All Files", "*.*")],
+            'markdown': [("Markdown Files", "*.md"), ("All Files", "*.*")]
+        }
+        return filetypes_map.get(format_type, [("All Files", "*.*")])
+
+    def _on_format_changed(self, *args):
+        """Handle format selection change."""
+        # Update file extension in path entry
+        current_path = self.path_entry.get()
+        if current_path:
+            path = Path(current_path)
+            new_ext = self._get_extension()
+            new_path = path.with_suffix(new_ext)
+            self.path_entry.delete(0, "end")
+            self.path_entry.insert(0, str(new_path))
+
     def _browse_output(self):
         """Open file browser for output path selection."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_filename = f"inspection_report_{timestamp}.csv"
+        ext = self._get_extension()
+        default_filename = f"inspection_report_{timestamp}{ext}"
 
         file_path = filedialog.asksaveasfilename(
             parent=self,
             title="Save Report As",
-            defaultextension=".csv",
-            filetypes=[
-                ("CSV Files", "*.csv"),
-                ("All Files", "*.*")
-            ],
+            defaultextension=ext,
+            filetypes=self._get_filetypes(),
             initialfile=default_filename
         )
 
@@ -218,6 +263,18 @@ class ReportDialog(ctk.CTkToplevel):
             )
             return
 
+        # Validate confidence threshold
+        try:
+            confidence_threshold = float(self.confidence_var.get())
+            if not 0.0 <= confidence_threshold <= 1.0:
+                raise ValueError("Confidence threshold must be between 0.0 and 1.0")
+        except ValueError as e:
+            self.info_label.configure(
+                text=f"Invalid confidence threshold: {e}",
+                text_color="#E74C3C"
+            )
+            return
+
         self.output_path = Path(output_path_str)
 
         # Check for file overwrite
@@ -231,32 +288,50 @@ class ReportDialog(ctk.CTkToplevel):
         self.progress_bar.grid()  # Show progress bar
         self.progress_bar.set(0.3)  # Indeterminate progress
 
+        # Get selected format
+        report_format = self.format_var.get()
+
         # Generate in background thread
         def generate_task():
             """Background task for report generation."""
             try:
-                # Convert execution results to CommandResponse objects
-                from src.core.command_response import CommandResponse
+                # If ModemFeatures available, use new report generation
+                if self.modem_features:
+                    report_result = self.report_generator.generate_report(
+                        features=self.modem_features,
+                        output_path=self.output_path,
+                        format=report_format,
+                        confidence_threshold=confidence_threshold
+                    )
+                    return report_result
 
-                responses = []
-                for result in self.execution_results:
-                    if "response" in result:
-                        responses.append(result["response"])
+                # Fallback: Use old CSVReporter for backward compatibility
+                else:
+                    from src.core.command_response import CommandResponse
+                    from src.reports.csv_reporter import CSVReporter
 
-                # Generate CSV report
-                reporter = CSVReporter()
-                report_result = reporter.generate(responses, self.output_path)
+                    responses = []
+                    for result in self.execution_results:
+                        if "response" in result:
+                            responses.append(result["response"])
 
-                return report_result
+                    # Only CSV supported in fallback mode
+                    if report_format != 'csv':
+                        raise ValueError(f"Format '{report_format}' requires ModemFeatures. Only CSV is available in fallback mode.")
+
+                    reporter = CSVReporter()
+                    report_result = reporter.generate(responses, self.output_path)
+                    return report_result
 
             except Exception as e:
                 # Return error result
-                from dataclasses import dataclass
-                @dataclass
-                class ErrorResult:
-                    success: bool = False
-                    error: str = str(e)
-                return ErrorResult()
+                from src.reports.report_models import ReportResult
+                return ReportResult(
+                    output_path=self.output_path,
+                    format=report_format,
+                    success=False,
+                    error_message=str(e)
+                )
 
         # Create worker thread
         worker = WorkerThread(target=generate_task)
@@ -279,14 +354,18 @@ class ReportDialog(ctk.CTkToplevel):
                     file_size = self.output_path.stat().st_size
                     size_str = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
 
+                    validation_msg = ""
+                    if not result.validation_passed:
+                        validation_msg = " (validation warnings)"
+
                     self.info_label.configure(
-                        text=f"✓ Report saved successfully! ({size_str})",
+                        text=f"✓ Report saved successfully! ({size_str}){validation_msg}",
                         text_color="#2FA572"
                     )
                     self.generated_file = self.output_path
                     self.open_report_button.configure(state="normal")
                 else:
-                    error_msg = result.error if result else "Unknown error"
+                    error_msg = result.error_message if hasattr(result, 'error_message') else "Unknown error"
                     self.info_label.configure(
                         text=f"Error: {error_msg}",
                         text_color="#E74C3C"
