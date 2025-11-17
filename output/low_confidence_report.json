@@ -1,0 +1,84 @@
+{
+  "metadata": {
+    "report_format": "json",
+    "generated_at": "2025-11-17T08:57:29",
+    "version": "1.0.0",
+    "aggregate_confidence": 0.42,
+    "confidence_threshold": 0.0,
+    "total_features": 26
+  },
+  "features": {
+    "basic_info": {
+      "manufacturer": "Unknown",
+      "manufacturer_confidence": 0.45,
+      "model": "Unknown",
+      "model_confidence": 0.4,
+      "revision": "Unknown",
+      "revision_confidence": 0.0,
+      "imei": "Unknown",
+      "imei_confidence": 0.0,
+      "serial_number": "Unknown",
+      "serial_number_confidence": 0.0
+    },
+    "network_capabilities": {
+      "supported_technologies": [],
+      "supported_technologies_confidence": 0.0,
+      "lte_bands": [],
+      "lte_bands_confidence": 0.0,
+      "fiveg_bands": [],
+      "fiveg_bands_confidence": 0.0,
+      "max_downlink_speed": "Unknown",
+      "max_downlink_speed_confidence": 0.0,
+      "max_uplink_speed": "Unknown",
+      "max_uplink_speed_confidence": 0.0,
+      "carrier_aggregation": false,
+      "carrier_aggregation_confidence": 0.0,
+      "lte_category": "Unknown",
+      "lte_category_confidence": 0.0
+    },
+    "voice_features": {
+      "volte_supported": false,
+      "volte_supported_confidence": 0.0,
+      "vowifi_supported": false,
+      "vowifi_supported_confidence": 0.0,
+      "circuit_switched_voice": false,
+      "circuit_switched_voice_confidence": 0.0
+    },
+    "gnss_info": {
+      "gnss_supported": false,
+      "gnss_supported_confidence": 0.0,
+      "supported_systems": [],
+      "supported_systems_confidence": 0.0,
+      "last_location": null,
+      "last_location_confidence": 0.0
+    },
+    "power_management": {
+      "psm_supported": false,
+      "psm_supported_confidence": 0.0,
+      "edrx_supported": false,
+      "edrx_supported_confidence": 0.0,
+      "power_class": "Unknown",
+      "power_class_confidence": 0.0,
+      "battery_voltage": null,
+      "battery_voltage_confidence": 0.0
+    },
+    "sim_info": {
+      "sim_status": "unknown",
+      "sim_status_confidence": 0.0,
+      "iccid": "Unknown",
+      "iccid_confidence": 0.0,
+      "imsi": "Unknown",
+      "imsi_confidence": 0.0,
+      "operator": "Unknown",
+      "operator_confidence": 0.0
+    }
+  },
+  "parsing_errors": [
+    "Failed to parse AT+CGMM response",
+    "Timeout on AT+CGSN command"
+  ],
+  "warnings": [
+    "Low aggregate confidence: 0.42 < 0.70. Some features may be unreliable.",
+    "Parsing errors encountered: 2 error(s). Check parsing_errors field for details."
+  ]
+}

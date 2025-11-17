@@ -1,0 +1,96 @@
+{
+  "metadata": {
+    "report_format": "json",
+    "generated_at": "2025-11-17T08:57:29",
+    "version": "1.0.0",
+    "aggregate_confidence": 0.85,
+    "confidence_threshold": 0.8,
+    "total_features": 26
+  },
+  "features": {
+    "basic_info": {
+      "manufacturer": "Quectel",
+      "manufacturer_confidence": 0.95,
+      "model": "EC25",
+      "model_confidence": 0.95,
+      "revision": "EC25EFAR06A03M4G",
+      "revision_confidence": 0.9,
+      "imei": "123456789012345",
+      "imei_confidence": 0.95,
+      "serial_number": "SN123456",
+      "serial_number_confidence": 0.85
+    },
+    "network_capabilities": {
+      "supported_technologies": [
+        "LTE",
+        "LTE-M"
+      ],
+      "supported_technologies_confidence": 0.9,
+      "lte_bands": [
+        1,
+        3,
+        7,
+        20,
+        28
+      ],
+      "lte_bands_confidence": 0.85,
+      "fiveg_bands": null,
+      "fiveg_bands_confidence": 0.0,
+      "max_downlink_speed": "150 Mbps",
+      "max_downlink_speed_confidence": 0.8,
+      "max_uplink_speed": "50 Mbps",
+      "max_uplink_speed_confidence": 0.8,
+      "carrier_aggregation": null,
+      "carrier_aggregation_confidence": 0.75,
+      "lte_category": "Cat 4",
+      "lte_category_confidence": 0.85
+    },
+    "voice_features": {
+      "volte_supported": true,
+      "volte_supported_confidence": 0.9,
+      "vowifi_supported": null,
+      "vowifi_supported_confidence": 0.6,
+      "circuit_switched_voice": true,
+      "circuit_switched_voice_confidence": 0.85
+    },
+    "gnss_info": {
+      "gnss_supported": true,
+      "gnss_supported_confidence": 0.95,
+      "supported_systems": [
+        "GPS",
+        "GLONASS",
+        "BeiDou"
+      ],
+      "supported_systems_confidence": 0.9,
+      "last_location": null,
+      "last_location_confidence": 0.0
+    },
+    "power_management": {
+      "psm_supported": true,
+      "psm_supported_confidence": 0.85,
+      "edrx_supported": true,
+      "edrx_supported_confidence": 0.8,
+      "power_class": null,
+      "power_class_confidence": 0.75,
+      "battery_voltage": 3800,
+      "battery_voltage_confidence": 0.9
+    },
+    "sim_info": {
+      "sim_status": "ready",
+      "sim_status_confidence": 0.95,
+      "iccid": "89012345678901234567",
+      "iccid_confidence": 0.9,
+      "imsi": "123456789012345",
+      "imsi_confidence": 0.9,
+      "operator": "Example Operator",
+      "operator_confidence": 0.85
+    }
+  },
+  "vendor_specific": {
+    "custom_field": "custom_value",
+    "advanced_features": {
+      "feature1": true,
+      "feature2": "enabled"
+    }
+  }
+}
