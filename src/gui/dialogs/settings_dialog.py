@@ -105,6 +105,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self.tabview.add("Logging")
         logging_frame = self.tabview.tab("Logging")
         logging_frame.grid_columnconfigure(1, weight=1)
+        logging_frame.grid_columnconfigure(2, weight=0)  # Configure column 2 for Browse button
 
         # Enable logging checkbox
         self.logging_enabled_var = ctk.BooleanVar(value=False)
@@ -173,7 +174,7 @@ class SettingsDialog(ctk.CTkToplevel):
             command=self._on_open_log_dir,
             state="disabled"
         )
-        self.open_log_dir_button.grid(row=5, column=0, columnspan=2, sticky="w", padx=10, pady=20)
+        self.open_log_dir_button.grid(row=5, column=0, columnspan=3, sticky="w", padx=10, pady=20)
 
         # Advanced settings tab
         self.tabview.add("Advanced")
