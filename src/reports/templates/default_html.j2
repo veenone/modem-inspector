@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modem Features Report - {{ modem_id }}</title>
+    <style>
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Header Styles */
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        header .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 14px;
+            opacity: 0.95;
+        }
+
+        header .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Main Content */
+        main {
+            padding: 30px;
+        }
+
+        /* Summary Section */
+        .summary {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .summary h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background-color: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* Feature Categories */
+        .category {
+            margin-bottom: 35px;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .category-header h2 {
+            font-size: 20px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .category-icon {
+            width: 24px;
+            height: 24px;
+            display: inline-block;
+        }
+
+        /* Feature Table */
+        .feature-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .feature-table th {
+            background-color: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            color: #495057;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .feature-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 14px;
+        }
+
+        .feature-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .feature-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .feature-value {
+            color: #495057;
+        }
+
+        .feature-unit {
+            color: #6c757d;
+            font-size: 13px;
+            font-style: italic;
+        }
+
+        /* Confidence Badges */
+        .confidence-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            min-width: 60px;
+        }
+
+        .confidence-high {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-medium {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-low {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Warnings and Errors */
+        .warnings {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .warnings h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #856404;
+        }
+
+        .warnings ul {
+            list-style-position: inside;
+            color: #856404;
+            font-size: 14px;
+        }
+
+        .errors {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .errors h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #721c24;
+        }
+
+        .errors ul {
+            list-style-position: inside;
+            color: #721c24;
+            font-size: 14px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .empty-state p {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        /* Footer */
+        footer {
+            background-color: #f8f9fa;
+            padding: 20px 30px;
+            border-top: 1px solid #dee2e6;
+            font-size: 13px;
+            color: #6c757d;
+            text-align: center;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+
+            header {
+                background: #667eea;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .feature-table tr:hover {
+                background-color: transparent;
+            }
+
+            .confidence-badge {
+                border: 1px solid #333;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            header {
+                padding: 20px;
+            }
+
+            header h1 {
+                font-size: 22px;
+            }
+
+            main {
+                padding: 15px;
+            }
+
+            .feature-table {
+                font-size: 13px;
+            }
+
+            .feature-table th,
+            .feature-table td {
+                padding: 8px;
+            }
+
+            .summary-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Modem Features Report</h1>
+            <div class="meta">
+                <div class="meta-item">
+                    <strong>Modem ID:</strong> {{ modem_id or 'Unknown' }}
+                </div>
+                <div class="meta-item">
+                    <strong>Generated:</strong> {{ generation_time }}
+                </div>
+                <div class="meta-item">
+                    <strong>Confidence Threshold:</strong> {{ "%.0f"|format(confidence_threshold * 100) }}%
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Summary Statistics -->
+            <section class="summary">
+                <h2>Report Summary</h2>
+                <div class="summary-stats">
+                    <div class="stat-card">
+                        <div class="label">Total Features</div>
+                        <div class="value">{{ total_features }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Aggregate Confidence</div>
+                        <div class="value">{{ "%.0f"|format(aggregate_confidence * 100) }}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">High Confidence</div>
+                        <div class="value">{{ high_confidence_count }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Categories</div>
+                        <div class="value">{{ categories|length }}</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Parsing Errors -->
+            {% if parsing_errors %}
+            <section class="errors">
+                <h3>⚠️ Parsing Errors</h3>
+                <ul>
+                    {% for error in parsing_errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endif %}
+
+            <!-- Warnings -->
+            {% if warnings %}
+            <section class="warnings">
+                <h3>⚠️ Warnings</h3>
+                <ul>
+                    {% for warning in warnings %}
+                    <li>{{ warning }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endif %}
+
+            <!-- Feature Categories -->
+            {% for category in categories %}
+            <section class="category">
+                <div class="category-header">
+                    <h2>{{ category.name }}</h2>
+                </div>
+
+                {% if category.features %}
+                <table class="feature-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Feature</th>
+                            <th style="width: 35%;">Value</th>
+                            <th style="width: 15%;">Confidence</th>
+                            <th style="width: 20%;">Unit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for feature in category.features %}
+                        <tr>
+                            <td class="feature-name">{{ feature.name }}</td>
+                            <td class="feature-value">{{ feature.value }}</td>
+                            <td>
+                                {% if feature.confidence >= 0.7 %}
+                                <span class="confidence-badge confidence-high">{{ "%.0f"|format(feature.confidence * 100) }}%</span>
+                                {% elif feature.confidence >= 0.3 %}
+                                <span class="confidence-badge confidence-medium">{{ "%.0f"|format(feature.confidence * 100) }}%</span>
+                                {% else %}
+                                <span class="confidence-badge confidence-low">{{ "%.0f"|format(feature.confidence * 100) }}%</span>
+                                {% endif %}
+                            </td>
+                            <td class="feature-unit">{{ feature.unit or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <p>No features available in this category</p>
+                </div>
+                {% endif %}
+            </section>
+            {% endfor %}
+
+            <!-- Vendor Specific Features -->
+            {% if vendor_specific %}
+            <section class="category">
+                <div class="category-header">
+                    <h2>Vendor-Specific Features</h2>
+                </div>
+                <table class="feature-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">Feature</th>
+                            <th style="width: 60%;">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, value in vendor_specific.items() %}
+                        <tr>
+                            <td class="feature-name">{{ key }}</td>
+                            <td class="feature-value">{{ value }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+            {% endif %}
+        </main>
+
+        <footer>
+            <p>Generated by Modem Inspector Report Generation System</p>
+            <p>Report format: HTML | Confidence threshold: {{ "%.0f"|format(confidence_threshold * 100) }}%</p>
+        </footer>
+    </div>
+</body>
+</html>
