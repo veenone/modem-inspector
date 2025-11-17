@@ -6,12 +6,13 @@ graceful cancellation support.
 
 import customtkinter as ctk
 import time
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Any
 from datetime import datetime, timedelta
 from src.gui.widgets import ProgressLog
 from src.gui.utils.threading_utils import WorkerThread
 from src.core.at_executor import ATExecutor
 from src.core.plugin import Plugin, CommandDefinition
+from src.parsers import FeatureExtractor, ModemFeatures
 
 
 class ExecutionFrame(ctk.CTkFrame):
@@ -52,6 +53,8 @@ class ExecutionFrame(ctk.CTkFrame):
         self.cancel_requested = False
         self.start_time: Optional[float] = None
         self.execution_results = []
+        self.modem_features: Optional[ModemFeatures] = None
+        self.feature_extractor = FeatureExtractor()
 
         self._setup_ui()
 
@@ -349,6 +352,42 @@ class ExecutionFrame(ctk.CTkFrame):
         self.start_button.configure(state="normal" if self.at_executor and self.commands else "disabled")
         self.cancel_button.configure(state="disabled")
 
+        # Parse features from execution results
+        if self.execution_results and self.plugin:
+            try:
+                self.progress_log.log("", level="info")
+                self.progress_log.log("Parsing modem features...", level="info")
+
+                # Convert execution results to response dictionary
+                responses = {}
+                for result in self.execution_results:
+                    if "command" in result and "response" in result:
+                        cmd = result["command"]
+                        responses[cmd] = result["response"]
+
+                # Extract features using parser layer
+                self.modem_features = self.feature_extractor.extract_features(
+                    responses=responses,
+                    plugin=self.plugin
+                )
+
+                # Log parsing results
+                if self.modem_features:
+                    confidence = self.modem_features.aggregate_confidence
+                    self.progress_log.log(
+                        f"Features parsed successfully (confidence: {confidence:.1%})",
+                        level="success"
+                    )
+                    if self.modem_features.parsing_errors:
+                        self.progress_log.log(
+                            f"Parsing warnings: {len(self.modem_features.parsing_errors)}",
+                            level="warning"
+                        )
+
+            except Exception as e:
+                self.progress_log.log(f"Feature parsing failed: {e}", level="error")
+                self.modem_features = None
+
         # Display summary
         if self.execution_results:
             success_count = sum(1 for r in self.execution_results if "response" in r and r["response"].is_success())
@@ -386,6 +425,14 @@ class ExecutionFrame(ctk.CTkFrame):
             List of result dictionaries
         """
         return self.execution_results
+
+    def get_modem_features(self) -> Optional[ModemFeatures]:
+        """Get parsed modem features from last execution.
+
+        Returns:
+            ModemFeatures object if parsing succeeded, None otherwise
+        """
+        return self.modem_features
 
     def is_execution_running(self) -> bool:
         """Check if execution is currently running.

@@ -358,8 +358,11 @@ class Application(ctk.CTk):
         Args:
             results: List of execution results
         """
-        # Display results
-        self.results_frame.display_results(results)
+        # Get parsed modem features from execution frame
+        modem_features = self.execution_frame.get_modem_features()
+
+        # Display results with modem features
+        self.results_frame.display_results(results, modem_features)
 
         # Save to history
         if self.current_plugin and self.serial_handler:
@@ -383,7 +386,10 @@ class Application(ctk.CTk):
         if not results:
             return
 
-        dialog = ReportDialog(self, execution_results=results)
+        # Get modem features for enhanced reporting
+        modem_features = self.results_frame.get_modem_features()
+
+        dialog = ReportDialog(self, execution_results=results, modem_features=modem_features)
         dialog.wait_window()
 
     def show_settings(self):

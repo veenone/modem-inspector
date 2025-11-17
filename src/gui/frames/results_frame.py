@@ -6,7 +6,7 @@ pagination, and export functionality.
 
 import customtkinter as ctk
 import tkinter as tk
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Any
 from src.core.command_response import CommandResponse
 
 
@@ -41,6 +41,7 @@ class ResultsFrame(ctk.CTkFrame):
 
         self.on_export_callback = on_export
         self.results_data: List[Dict] = []
+        self.modem_features: Optional[Any] = None  # ModemFeatures from parser
         self.current_search = ""
         self.results_by_category: Dict[str, List[Dict]] = {}
 
@@ -113,20 +114,22 @@ class ResultsFrame(ctk.CTkFrame):
             )
             empty_label.pack(expand=True)
 
-    def display_results(self, results: List[Dict]):
+    def display_results(self, results: List[Dict], modem_features: Optional[Any] = None):
         """Display inspection results.
 
         Args:
             results: List of result dictionaries from execution
+            modem_features: Optional ModemFeatures object from parser
 
         Example:
             >>> results = [
             ...     {"command": "AT", "response": response_obj, "category": "basic"},
             ...     {"command": "AT+CGMI", "response": response_obj, "category": "basic"}
             ... ]
-            >>> frame.display_results(results)
+            >>> frame.display_results(results, modem_features)
         """
         self.results_data = results
+        self.modem_features = modem_features
 
         if not results:
             self._show_empty_state()
@@ -300,6 +303,14 @@ class ResultsFrame(ctk.CTkFrame):
             List of result dictionaries
         """
         return self.results_data
+
+    def get_modem_features(self) -> Optional[Any]:
+        """Get parsed modem features.
+
+        Returns:
+            ModemFeatures object if available, None otherwise
+        """
+        return self.modem_features
 
     def clear_results(self):
         """Clear all results."""
