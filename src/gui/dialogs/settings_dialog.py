@@ -31,8 +31,9 @@ class SettingsDialog(ctk.CTkToplevel):
         super().__init__(parent, **kwargs)
 
         self.title("Settings")
-        self.geometry("500x400")
-        self.resizable(False, False)
+        self.geometry("600x550")
+        self.resizable(True, True)
+        self.minsize(500, 450)  # Set minimum size
 
         # Make modal
         self.transient(parent)
