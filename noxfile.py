@@ -84,6 +84,64 @@ def validate_plugins(session):
 
 
 @nox.session(python="3.10")
+def tests_unit(session):
+    """Run unit tests only."""
+    session.install("-e", ".[dev]")
+    session.run("pytest", "tests/unit", "-v", *session.posargs)
+
+
+@nox.session(python="3.10")
+def tests_integration(session):
+    """Run integration tests only."""
+    session.install("-e", ".[dev]")
+    session.run("pytest", "tests/integration", "-v", *session.posargs)
+
+
+@nox.session(python="3.10")
+def tests_reports(session):
+    """Run report generation tests only."""
+    session.install("-e", ".[dev]")
+    session.run("pytest", "tests/unit/test_report*.py", "tests/unit/test_*_reporter.py", "-v", *session.posargs)
+
+
+@nox.session(python="3.10")
+def tests_parsers(session):
+    """Run parser layer tests only."""
+    session.install("-e", ".[dev]")
+    session.run("pytest", "-k", "parser", "-v", *session.posargs)
+
+
+@nox.session(python="3.10")
+def tests_at_engine(session):
+    """Run AT command engine tests only."""
+    session.install("-e", ".[dev]")
+    session.run("pytest", "tests/unit/test_at_executor.py", "tests/unit/test_serial_handler.py", "tests/unit/test_command_response.py", "-v", *session.posargs)
+
+
+@nox.session(python="3.10")
+def tests_quick(session):
+    """Quick test run (unit tests, no coverage, fast fail)."""
+    session.install("-e", ".[dev]")
+    session.run("pytest", "tests/unit", "-x", "--tb=short", *session.posargs)
+
+
+@nox.session(python="3.10")
+def ci(session):
+    """Run full CI pipeline (tests + coverage + lint)."""
+    session.install("-e", ".[dev]")
+    session.run(
+        "pytest",
+        "--cov=src",
+        "--cov-report=term-missing",
+        "--cov-report=xml",
+        "--cov-fail-under=80",
+        "-v"
+    )
+    session.run("flake8", "src", "tests")
+    session.run("mypy", "src", "--ignore-missing-imports")
+
+
+@nox.session(python="3.10")
 def clean(session):
     """Clean build artifacts and caches."""
     import shutil
